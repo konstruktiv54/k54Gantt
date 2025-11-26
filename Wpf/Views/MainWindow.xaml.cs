@@ -105,6 +105,14 @@ public partial class MainWindow : Window
     {
         GanttChart.InvalidateChart();
     }
+    
+    /// <summary>
+    /// Принудительно перерисовывает диаграмму (полный сброс).
+    /// </summary>
+    public void ForceRefreshChart()
+    {
+        GanttChart.ForceFullRedraw();
+    }
 
     private void OnClosing(object? sender, CancelEventArgs e)
     {

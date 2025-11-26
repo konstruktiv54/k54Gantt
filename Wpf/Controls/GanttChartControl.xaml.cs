@@ -415,7 +415,7 @@ public partial class GanttChartControl : UserControl
         if (ProjectManager == null)
             return;
 
-        var index = ProjectManager.IndexOf(task);
+        var index = GetRealTaskIndex(task);
         if (index < 0)
             return;
 
@@ -439,11 +439,42 @@ public partial class GanttChartControl : UserControl
 
         ChartScrollViewer.ScrollToHorizontalOffset(x - ChartScrollViewer.ViewportWidth / 2);
     }
+    
+    /// <summary>
+    /// Полностью сбрасывает и перерисовывает диаграмму.
+    /// Используется после структурных изменений (удаление/добавление задач).
+    /// </summary>
+    public void ForceFullRedraw()
+    {
+        // Очищаем все слои
+        ClearAllLayers();
+    
+        // Сбрасываем флаг рендеринга
+        _isRendering = false;
+    
+        // Принудительно вызываем рендеринг
+        if (IsLoaded && ProjectManager != null)
+        {
+            Render();
+        }
+    }
 
     #endregion
 
     #region Private Methods - Rendering
 
+    /// <summary>
+    /// Возвращает реальный индекс задачи в списке Tasks.
+    /// Обходит проблему с кэшированными индексами в ProjectManager.IndexOf().
+    /// </summary>
+    private int GetRealTaskIndex(Task task)
+    {
+        if (ProjectManager == null) return -1;
+    
+        var tasks = ProjectManager.Tasks.ToList();
+        return tasks.IndexOf(task);
+    }
+    
     private void Render()
     {
         if (ProjectManager == null)
@@ -568,7 +599,7 @@ public partial class GanttChartControl : UserControl
         if (SelectedTask == null || ProjectManager == null)
             return;
 
-        var index = ProjectManager.IndexOf(SelectedTask);
+        var index = GetRealTaskIndex(SelectedTask);
         if (index < 0)
             return;
 

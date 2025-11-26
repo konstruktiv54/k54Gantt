@@ -414,14 +414,43 @@
                     Background="{StaticResource BackgroundBrush}"
                     BorderBrush="{StaticResource GridLineBrush}"
                     BorderThickness="1,0,0,0">
-    
-                <controls:GanttChartControl 
+
+                <controls:GanttChartControl
                     x:Name="GanttChart"
                     ProjectManager="{Binding ProjectManager}"
                     ZoomLevel="{Binding ZoomLevel}"
                     SelectedTask="{Binding SelectedTask, Mode=TwoWay}"
                     ResourceService="{Binding ResourceService}"
-                    TaskDoubleClicked="GanttChart_TaskDoubleClicked"/>
+                    TaskDoubleClicked="GanttChart_TaskDoubleClicked"
+                    Tag="{Binding}">
+                    <controls:GanttChartControl.ContextMenu>
+                        <ContextMenu DataContext="{Binding PlacementTarget.Tag, RelativeSource={RelativeSource Self}}">
+                            <MenuItem Header="Добавить задачу" Command="{Binding AddTaskCommand}" />
+                            <MenuItem Header="Добавить подзадачу" Command="{Binding AddSubtaskCommand}" />
+                            <Separator />
+                            <MenuItem Header="Создать группу" Command="{Binding MakeGroupCommand}" />
+                            <MenuItem Header="Добавить в группу..."
+                                      ItemsSource="{Binding AvailableGroups}"
+                                      IsEnabled="{Binding AvailableGroups.Count, Converter={StaticResource CountToBoolConverter}}">
+                                <MenuItem.ItemContainerStyle>
+                                    <Style TargetType="MenuItem">
+                                        <Setter Property="Header" Value="{Binding Name}" />
+                                        <Setter Property="Command"
+                                                Value="{Binding DataContext.AddToGroupCommand, 
+                            RelativeSource={RelativeSource AncestorType=ContextMenu}}" />
+                                        <Setter Property="CommandParameter" Value="{Binding}" />
+                                    </Style>
+                                </MenuItem.ItemContainerStyle>
+                            </MenuItem>
+                            <MenuItem Header="Убрать из группы" Command="{Binding RemoveFromGroupCommand}" />
+                            <MenuItem Header="Разгруппировать" Command="{Binding UngroupCommand}" />
+                            <Separator />
+                            <MenuItem Header="Назначить ресурсы..." Command="{Binding AssignResourcesCommand}" />
+                            <Separator />
+                            <MenuItem Header="Удалить" Command="{Binding DeleteTaskCommand}" Foreground="#D32F2F" />
+                        </ContextMenu>
+                    </controls:GanttChartControl.ContextMenu>
+                </controls:GanttChartControl>
             </Border>
         </Grid>
     </DockPanel>

@@ -126,20 +126,17 @@ public partial class MainViewModel : ObservableObject
     /// <summary>
     /// Корневые элементы для TreeView (иерархическая структура).
     /// </summary>
-    [ObservableProperty]
-    private ObservableCollection<TaskItemViewModel>? _rootTasks;
+    [ObservableProperty] private ObservableCollection<TaskItemViewModel>? _rootTasks;
 
     /// <summary>
     /// Плоский список видимых задач для DataGrid.
     /// </summary>
-    [ObservableProperty]
-    private ObservableCollection<TaskItemViewModel>? _flatTasks;
+    [ObservableProperty] private ObservableCollection<TaskItemViewModel>? _flatTasks;
 
     /// <summary>
     /// Выбранный элемент в TreeView/DataGrid (wrapper).
     /// </summary>
-    [ObservableProperty]
-    private TaskItemViewModel? _selectedTaskItem;
+    [ObservableProperty] private TaskItemViewModel? _selectedTaskItem;
 
     partial void OnSelectedTaskItemChanged(TaskItemViewModel? value)
     {
@@ -182,8 +179,7 @@ public partial class MainViewModel : ObservableObject
     /// <summary>
     /// Глобальный toggle для отображения split-частей.
     /// </summary>
-    [ObservableProperty]
-    private bool _showAllSplitParts;
+    [ObservableProperty] private bool _showAllSplitParts;
 
     partial void OnShowAllSplitPartsChanged(bool value)
     {
@@ -197,7 +193,7 @@ public partial class MainViewModel : ObservableObject
             ScheduleFlatListUpdate();
         }
     }
-    
+
     /// <summary>
     /// Список доступных групп для подменю "Добавить в группу".
     /// </summary>
@@ -206,8 +202,8 @@ public partial class MainViewModel : ObservableObject
     /// <summary>
     /// Можно ли превратить выбранную задачу в группу.
     /// </summary>
-    public bool CanMakeGroup => SelectedTaskItem != null 
-                                && !SelectedTaskItem.IsGroup 
+    public bool CanMakeGroup => SelectedTaskItem != null
+                                && !SelectedTaskItem.IsGroup
                                 && !SelectedTaskItem.IsPart;
 
     /// <summary>
@@ -218,8 +214,8 @@ public partial class MainViewModel : ObservableObject
     /// <summary>
     /// Можно ли разгруппировать выбранную задачу.
     /// </summary>
-    public bool CanUngroup => SelectedTaskItem != null 
-                              && SelectedTaskItem.IsGroup 
+    public bool CanUngroup => SelectedTaskItem != null
+                              && SelectedTaskItem.IsGroup
                               && SelectedTaskItem.Children.Count > 0;
 
     /// <summary>
@@ -501,6 +497,7 @@ public partial class MainViewModel : ObservableObject
             {
                 ManageResources();
             }
+
             return;
         }
 
@@ -617,7 +614,7 @@ public partial class MainViewModel : ObservableObject
         if (SelectedTaskItem.IsGroup && SelectedTaskItem.Children.Count > 0)
         {
             var result = MessageBox.Show(
-                $"Удалить группу '{taskName}' вместе со всеми подзадачами?",
+                $"Удалить группу '{taskName}' вместе со всеми подзадачами ({SelectedTaskItem.Children.Count})?",
                 "Подтверждение удаления",
                 MessageBoxButton.YesNo,
                 MessageBoxImage.Warning);
@@ -626,13 +623,76 @@ public partial class MainViewModel : ObservableObject
                 return;
         }
 
-        SelectedTaskItem = null;
-        ProjectManager.Delete(taskToDelete);
-        _resourceService.UnassignAllFromTask(taskToDelete.Id);
+        // Собираем все задачи для удаления (рекурсивно)
+        var tasksToDelete = new List<Task>();
+        CollectTasksToDelete(taskToDelete, tasksToDelete);
 
+        SelectedTaskItem = null;
+        SelectedTask = null;
+
+        // Удаляем все задачи в обратном порядке (сначала детей)
+        for (int i = tasksToDelete.Count - 1; i >= 0; i--)
+        {
+            var task = tasksToDelete[i];
+            _resourceService.UnassignAllFromTask(task.Id);
+            ProjectManager.Delete(task);
+        }
+
+        // Диагностика
+        System.Diagnostics.Debug.WriteLine($"=== BEFORE DELETE ===");
+        System.Diagnostics.Debug.WriteLine($"Tasks count: {ProjectManager.Tasks.Count}");
+        foreach (var t in ProjectManager.Tasks)
+        {
+            System.Diagnostics.Debug.WriteLine($"  [{ProjectManager.IndexOf(t)}] {t.Name}");
+        }
+        
         RebuildHierarchy();
+        
+        // Диагностика
+        System.Diagnostics.Debug.WriteLine($"=== AFTER DELETE ===");
+        System.Diagnostics.Debug.WriteLine($"Tasks count: {ProjectManager.Tasks.Count}");
+        foreach (var t in ProjectManager.Tasks)
+        {
+            System.Diagnostics.Debug.WriteLine($"  [{ProjectManager.IndexOf(t)}] {t.Name}");
+        }
         MarkAsModified();
-        StatusText = $"Удалена задача: {taskName}";
+
+        var count = tasksToDelete.Count;
+        StatusText = count > 1
+            ? $"Удалено задач: {count}"
+            : $"Удалена задача: {taskName}";
+    }
+
+    /// <summary>
+    /// Рекурсивно собирает задачу и всех её потомков для удаления.
+    /// </summary>
+    private void CollectTasksToDelete(Task task, List<Task> result)
+    {
+        // Сначала добавляем саму задачу
+        result.Add(task);
+
+        // Затем рекурсивно добавляем всех членов группы
+        if (ProjectManager != null && ProjectManager.IsGroup(task))
+        {
+            var members = ProjectManager.MembersOf(task).ToList();
+            foreach (var member in members)
+            {
+                CollectTasksToDelete(member, result);
+            }
+        }
+
+        // Также добавляем split-части, если есть
+        if (ProjectManager != null && ProjectManager.IsSplit(task))
+        {
+            var parts = ProjectManager.PartsOf(task).ToList();
+            foreach (var part in parts)
+            {
+                if (!result.Contains(part))
+                {
+                    result.Add(part);
+                }
+            }
+        }
     }
 
     /// <summary>
@@ -1111,7 +1171,8 @@ public partial class MainViewModel : ObservableObject
     {
         if (Application.Current?.MainWindow is MainWindow mainWindow)
         {
-            mainWindow.RefreshChart();
+            // Принудительный сброс и перерисовка
+            mainWindow.ForceRefreshChart();
         }
     }
 
