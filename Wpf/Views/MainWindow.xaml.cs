@@ -1,5 +1,6 @@
 ﻿using System.ComponentModel;
 using System.Windows;
+using System.Windows.Input;
 using Wpf.ViewModels;
 
 namespace Wpf.Views;
@@ -28,6 +29,21 @@ public partial class MainWindow : Window
         if (DataContext is MainViewModel vm && e.NewValue is TaskItemViewModel selectedItem)
         {
             vm.SelectedTaskItem = selectedItem;
+        }
+    }
+    
+    /// <summary>
+    /// Обработчик двойного клика по элементу TreeView.
+    /// </summary>
+    private void TreeViewItem_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+    {
+        if (e.ClickCount == 2 && sender is FrameworkElement element)
+        {
+            if (element.DataContext is TaskItemViewModel item && item.IsGroup)
+            {
+                item.IsExpanded = !item.IsExpanded;
+                e.Handled = true;
+            }
         }
     }
 

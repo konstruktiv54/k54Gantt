@@ -168,6 +168,10 @@ public partial class MainViewModel : ObservableObject
             {
                 SelectedTask = null;
             }
+
+            // Обновляем доступные группы и состояния команд
+            UpdateAvailableGroups();
+            NotifyCommandStatesChanged();
         }
         finally
         {
@@ -193,6 +197,40 @@ public partial class MainViewModel : ObservableObject
             ScheduleFlatListUpdate();
         }
     }
+    
+    /// <summary>
+    /// Список доступных групп для подменю "Добавить в группу".
+    /// </summary>
+    public ObservableCollection<TaskItemViewModel> AvailableGroups { get; } = new();
+
+    /// <summary>
+    /// Можно ли превратить выбранную задачу в группу.
+    /// </summary>
+    public bool CanMakeGroup => SelectedTaskItem != null 
+                                && !SelectedTaskItem.IsGroup 
+                                && !SelectedTaskItem.IsPart;
+
+    /// <summary>
+    /// Можно ли убрать выбранную задачу из группы.
+    /// </summary>
+    public bool CanRemoveFromGroup => SelectedTaskItem?.Parent != null;
+
+    /// <summary>
+    /// Можно ли разгруппировать выбранную задачу.
+    /// </summary>
+    public bool CanUngroup => SelectedTaskItem != null 
+                              && SelectedTaskItem.IsGroup 
+                              && SelectedTaskItem.Children.Count > 0;
+
+    /// <summary>
+    /// Можно ли добавить подзадачу.
+    /// </summary>
+    public bool CanAddSubtask => SelectedTaskItem != null && !SelectedTaskItem.IsPart;
+
+    /// <summary>
+    /// Можно ли удалить выбранную задачу.
+    /// </summary>
+    public bool CanDeleteTask => SelectedTaskItem != null;
 
     #endregion
 
@@ -507,6 +545,245 @@ public partial class MainViewModel : ObservableObject
 
     #endregion
 
+    #region Task Commands
+
+    /// <summary>
+    /// Команда: Добавить задачу.
+    /// </summary>
+    [RelayCommand]
+    private void AddTask()
+    {
+        if (ProjectManager == null) return;
+
+        var newTask = new Task { Name = "Новая задача" };
+        ProjectManager.Add(newTask);
+        ProjectManager.SetStart(newTask, TimeSpan.Zero);
+        ProjectManager.SetDuration(newTask, TimeSpan.FromDays(5));
+
+        // Если выбрана задача — добавляем как child
+        if (SelectedTaskItem != null && !SelectedTaskItem.IsPart)
+        {
+            // Если выбранная задача ещё не группа — делаем её группой
+            if (!SelectedTaskItem.IsGroup)
+            {
+                // Задача станет группой автоматически при добавлении child
+            }
+
+            ProjectManager.Group(SelectedTaskItem.Task, newTask);
+        }
+
+        // Перестраиваем иерархию и выделяем новую задачу
+        RebuildHierarchy();
+        SelectTaskById(newTask.Id);
+
+        MarkAsModified();
+        StatusText = "Добавлена новая задача";
+    }
+
+    /// <summary>
+    /// Команда: Добавить подзадачу.
+    /// </summary>
+    [RelayCommand(CanExecute = nameof(CanAddSubtask))]
+    private void AddSubtask()
+    {
+        if (ProjectManager == null || SelectedTaskItem == null) return;
+
+        var newTask = new Task { Name = "Новая подзадача" };
+        ProjectManager.Add(newTask);
+        ProjectManager.SetStart(newTask, SelectedTaskItem.Task.Start);
+        ProjectManager.SetDuration(newTask, TimeSpan.FromDays(3));
+
+        // Добавляем как child к выбранной задаче
+        ProjectManager.Group(SelectedTaskItem.Task, newTask);
+
+        RebuildHierarchy();
+        SelectTaskById(newTask.Id);
+
+        MarkAsModified();
+        StatusText = "Добавлена подзадача";
+    }
+
+    /// <summary>
+    /// Команда: Удалить задачу.
+    /// </summary>
+    [RelayCommand(CanExecute = nameof(CanDeleteTask))]
+    private void DeleteTask()
+    {
+        if (ProjectManager == null || SelectedTaskItem == null) return;
+
+        var taskToDelete = SelectedTaskItem.Task;
+        var taskName = taskToDelete.Name;
+
+        // Подтверждение удаления группы с детьми
+        if (SelectedTaskItem.IsGroup && SelectedTaskItem.Children.Count > 0)
+        {
+            var result = MessageBox.Show(
+                $"Удалить группу '{taskName}' вместе со всеми подзадачами?",
+                "Подтверждение удаления",
+                MessageBoxButton.YesNo,
+                MessageBoxImage.Warning);
+
+            if (result != MessageBoxResult.Yes)
+                return;
+        }
+
+        SelectedTaskItem = null;
+        ProjectManager.Delete(taskToDelete);
+        _resourceService.UnassignAllFromTask(taskToDelete.Id);
+
+        RebuildHierarchy();
+        MarkAsModified();
+        StatusText = $"Удалена задача: {taskName}";
+    }
+
+    /// <summary>
+    /// Команда: Создать группу (обернуть выбранную задачу в новую группу).
+    /// </summary>
+    [RelayCommand(CanExecute = nameof(CanMakeGroup))]
+    private void MakeGroup()
+    {
+        if (ProjectManager == null || SelectedTaskItem == null) return;
+
+        var taskToWrap = SelectedTaskItem.Task;
+
+        // Запоминаем текущую родительскую группу
+        var currentParent = ProjectManager.DirectGroupOf(taskToWrap);
+
+        // Создаём новую группу
+        var newGroup = new Task { Name = "Новая группа" };
+        ProjectManager.Add(newGroup);
+        ProjectManager.SetStart(newGroup, taskToWrap.Start);
+        ProjectManager.SetDuration(newGroup, TimeSpan.FromDays(1));
+
+        // Если задача была в группе — добавляем новую группу туда же
+        if (currentParent != null)
+        {
+            ProjectManager.Ungroup(currentParent, taskToWrap);
+            ProjectManager.Group(currentParent, newGroup);
+        }
+
+        // Помещаем задачу в новую группу
+        ProjectManager.Group(newGroup, taskToWrap);
+
+        RebuildHierarchy();
+        SelectTaskById(newGroup.Id);
+
+        MarkAsModified();
+        StatusText = "Создана новая группа";
+    }
+
+    /// <summary>
+    /// Команда: Добавить в группу.
+    /// </summary>
+    [RelayCommand]
+    private void AddToGroup(TaskItemViewModel? targetGroup)
+    {
+        if (ProjectManager == null || SelectedTaskItem == null || targetGroup == null) return;
+
+        var taskToMove = SelectedTaskItem.Task;
+        var currentParent = ProjectManager.DirectGroupOf(taskToMove);
+
+        // Убираем из текущей группы
+        if (currentParent != null)
+        {
+            ProjectManager.Ungroup(currentParent, taskToMove);
+        }
+
+        // Добавляем в целевую группу
+        ProjectManager.Group(targetGroup.Task, taskToMove);
+
+        RebuildHierarchy();
+        SelectTaskById(taskToMove.Id);
+
+        MarkAsModified();
+        StatusText = $"Задача перемещена в '{targetGroup.Name}'";
+    }
+
+    /// <summary>
+    /// Команда: Убрать из группы.
+    /// </summary>
+    [RelayCommand(CanExecute = nameof(CanRemoveFromGroup))]
+    private void RemoveFromGroup()
+    {
+        if (ProjectManager == null || SelectedTaskItem == null) return;
+
+        var task = SelectedTaskItem.Task;
+        var parent = ProjectManager.DirectGroupOf(task);
+
+        if (parent != null)
+        {
+            ProjectManager.Ungroup(parent, task);
+
+            RebuildHierarchy();
+            SelectTaskById(task.Id);
+
+            MarkAsModified();
+            StatusText = "Задача убрана из группы";
+        }
+    }
+
+    /// <summary>
+    /// Команда: Разгруппировать (вынести всех детей на уровень выше).
+    /// </summary>
+    [RelayCommand(CanExecute = nameof(CanUngroup))]
+    private void Ungroup()
+    {
+        if (ProjectManager == null || SelectedTaskItem == null) return;
+
+        var group = SelectedTaskItem.Task;
+
+        // Получаем родителя группы (если есть)
+        var grandParent = ProjectManager.DirectGroupOf(group);
+
+        // Получаем всех прямых детей
+        var children = ProjectManager.MembersOf(group).ToList();
+
+        foreach (var child in children)
+        {
+            // Убираем из группы
+            ProjectManager.Ungroup(group, child);
+
+            // Если был дед — добавляем к нему
+            if (grandParent != null)
+            {
+                ProjectManager.Group(grandParent, child);
+            }
+        }
+
+        // Удаляем пустую группу
+        ProjectManager.Delete(group);
+        SelectedTaskItem = null;
+
+        RebuildHierarchy();
+        MarkAsModified();
+        StatusText = "Группа разгруппирована";
+    }
+
+    /// <summary>
+    /// Выделяет задачу по ID после перестройки иерархии.
+    /// </summary>
+    private void SelectTaskById(Guid taskId)
+    {
+        if (_hierarchyBuilder != null && RootTasks != null)
+        {
+            var vm = _hierarchyBuilder.FindByTaskId(RootTasks, taskId);
+            if (vm != null)
+            {
+                SelectedTaskItem = vm;
+
+                // Разворачиваем родителей для видимости
+                var parent = vm.Parent;
+                while (parent != null)
+                {
+                    parent.IsExpanded = true;
+                    parent = parent.Parent;
+                }
+            }
+        }
+    }
+
+    #endregion
+
     #region Public Methods
 
     /// <summary>
@@ -553,6 +830,7 @@ public partial class MainViewModel : ObservableObject
             var vm = _hierarchyBuilder.FindByTaskId(RootTasks, task.Id);
             vm?.Refresh();
         }
+
         MarkAsModified();
     }
 
@@ -725,6 +1003,66 @@ public partial class MainViewModel : ObservableObject
 
     #region Hierarchy Methods
 
+    /// <summary>
+    /// Обновляет список доступных групп для подменю.
+    /// </summary>
+    private void UpdateAvailableGroups()
+    {
+        AvailableGroups.Clear();
+
+        if (RootTasks == null || SelectedTaskItem == null) return;
+
+        // Собираем все группы, кроме текущей и её потомков
+        CollectAvailableGroups(RootTasks, SelectedTaskItem);
+    }
+
+    private void CollectAvailableGroups(
+        ObservableCollection<TaskItemViewModel> items, 
+        TaskItemViewModel excludeTask)
+    {
+        foreach (var item in items)
+        {
+            // Добавляем группу, если это не сама выбранная задача и не её потомок
+            if (item.IsGroup && item != excludeTask && !IsDescendantOf(item, excludeTask))
+            {
+                AvailableGroups.Add(item);
+            }
+
+            // Рекурсивно проверяем детей
+            if (item.Children.Count > 0)
+            {
+                CollectAvailableGroups(item.Children, excludeTask);
+            }
+        }
+    }
+
+    /// <summary>
+    /// Проверяет, является ли item потомком possibleAncestor.
+    /// </summary>
+    private bool IsDescendantOf(TaskItemViewModel item, TaskItemViewModel possibleAncestor)
+    {
+        var current = item.Parent;
+        while (current != null)
+        {
+            if (current == possibleAncestor)
+                return true;
+            current = current.Parent;
+        }
+        return false;
+    }
+
+    /// <summary>
+    /// Уведомляет об изменении состояния команд.
+    /// </summary>
+    private void NotifyCommandStatesChanged()
+    {
+        OnPropertyChanged(nameof(CanMakeGroup));
+        OnPropertyChanged(nameof(CanRemoveFromGroup));
+        OnPropertyChanged(nameof(CanUngroup));
+        OnPropertyChanged(nameof(CanAddSubtask));
+        OnPropertyChanged(nameof(CanDeleteTask));
+    }
+    
     private void InitializeHierarchyBuilder()
     {
         if (ProjectManager == null) return;

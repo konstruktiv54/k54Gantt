@@ -31,6 +31,11 @@
         <KeyBinding Key="D0" Modifiers="Control" Command="{Binding ZoomResetCommand}"/>
         <KeyBinding Key="R" Modifiers="Control" Command="{Binding ManageResourcesCommand}"/>
         <KeyBinding Key="R" Modifiers="Control+Shift" Command="{Binding AssignResourcesCommand}"/>
+        <KeyBinding Key="T" Modifiers="Control" Command="{Binding AddTaskCommand}"/>
+        <KeyBinding Key="T" Modifiers="Control+Shift" Command="{Binding AddSubtaskCommand}"/>
+        <KeyBinding Key="G" Modifiers="Control" Command="{Binding MakeGroupCommand}"/>
+        <KeyBinding Key="G" Modifiers="Control+Shift" Command="{Binding UngroupCommand}"/>
+        <KeyBinding Key="Delete" Command="{Binding DeleteTaskCommand}"/>
     </Window.InputBindings>
 
     <!-- ═══════════════════════════════════════════════════════════════ -->
@@ -39,9 +44,42 @@
     <Window.Resources>
         <converters:LevelToMarginConverter x:Key="LevelToMarginConverter" IndentSize="16"/>
         <converters:IsSplitToVisibilityConverter x:Key="IsSplitToVisibilityConverter"/>
+        <converters:CountToBoolConverter x:Key="CountToBoolConverter"/>
+        <ContextMenu x:Key="TaskContextMenu">
+            <MenuItem Header="Добавить задачу" 
+                      Command="{Binding AddTaskCommand}"/>
+            <MenuItem Header="Добавить подзадачу" 
+                      Command="{Binding AddSubtaskCommand}"/>
+            <Separator/>
+            <MenuItem Header="Создать группу" 
+                      Command="{Binding MakeGroupCommand}"/>
+            <MenuItem Header="Добавить в группу..." 
+                      ItemsSource="{Binding AvailableGroups}"
+                      IsEnabled="{Binding AvailableGroups.Count, Converter={StaticResource CountToBoolConverter}}">
+                <MenuItem.ItemContainerStyle>
+                    <Style TargetType="MenuItem">
+                        <Setter Property="Header" Value="{Binding Name}"/>
+                        <Setter Property="Command" Value="{Binding DataContext.AddToGroupCommand, 
+                    RelativeSource={RelativeSource AncestorType=ContextMenu}}"/>
+                        <Setter Property="CommandParameter" Value="{Binding}"/>
+                    </Style>
+                </MenuItem.ItemContainerStyle>
+            </MenuItem>
+            <MenuItem Header="Убрать из группы" 
+                      Command="{Binding RemoveFromGroupCommand}"/>
+            <MenuItem Header="Разгруппировать" 
+                      Command="{Binding UngroupCommand}"/>
+            <Separator/>
+            <MenuItem Header="Назначить ресурсы..." 
+                      Command="{Binding AssignResourcesCommand}"/>
+            <Separator/>
+            <MenuItem Header="Удалить" 
+                      Command="{Binding DeleteTaskCommand}"
+                      Foreground="#D32F2F"/>
+        </ContextMenu>
     </Window.Resources>
+    <!-- Контекстное меню для задач -->
     <DockPanel LastChildFill="True">
-
         <!-- ─────────────────────────────────────────────────────────── -->
         <!-- MENU                                                        -->
         <!-- ─────────────────────────────────────────────────────────── -->
@@ -94,6 +132,27 @@
                 <MenuItem Header="Показать части split-задач" 
                           IsCheckable="True"
                           IsChecked="{Binding ShowAllSplitParts}"/>
+            </MenuItem>
+            
+            <!-- Edit Menu -->
+            <MenuItem Header="_Правка">
+                <MenuItem Header="Добавить задачу" 
+                          Command="{Binding AddTaskCommand}"
+                          InputGestureText="Ctrl+T"/>
+                <MenuItem Header="Добавить подзадачу" 
+                          Command="{Binding AddSubtaskCommand}"
+                          InputGestureText="Ctrl+Shift+T"/>
+                <Separator/>
+                <MenuItem Header="Создать группу" 
+                          Command="{Binding MakeGroupCommand}"
+                          InputGestureText="Ctrl+G"/>
+                <MenuItem Header="Разгруппировать" 
+                          Command="{Binding UngroupCommand}"
+                          InputGestureText="Ctrl+Shift+G"/>
+                <Separator/>
+                <MenuItem Header="Удалить" 
+                          Command="{Binding DeleteTaskCommand}"
+                          InputGestureText="Del"/>
             </MenuItem>
 
             <!-- Resources -->
@@ -171,6 +230,7 @@
                               Style="{StaticResource TaskTreeViewStyle}"
                               ItemsSource="{Binding RootTasks}"
                               SelectedItemChanged="TaskTreeView_SelectedItemChanged"
+                              ContextMenu="{StaticResource TaskContextMenu}"
                               Margin="4">
                         <TreeView.ItemContainerStyle>
                             <Style TargetType="TreeViewItem">
@@ -181,49 +241,53 @@
                         </TreeView.ItemContainerStyle>
                         <TreeView.ItemTemplate>
                             <HierarchicalDataTemplate ItemsSource="{Binding Children}">
-                                <Grid ToolTip="{Binding ToolTip}">
-                                    <Grid.ColumnDefinitions>
-                                        <ColumnDefinition Width="Auto" />
-                                        <ColumnDefinition Width="*" />
-                                        <ColumnDefinition Width="Auto" />
-                                    </Grid.ColumnDefinitions>
+                                <Border Background="Transparent"
+                                        MouseLeftButtonDown="TreeViewItem_MouseLeftButtonDown"
+                                        ToolTip="{Binding ToolTip}">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="Auto" />
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="Auto" />
+                                        </Grid.ColumnDefinitions>
 
-                                    <!-- Иконка -->
-                                    <icon:MaterialIcon Grid.Column="0"
-                                                       Kind="{Binding IconKind}"
-                                                       Width="16" Height="16"
-                                                       Margin="0,0,6,0"
-                                                       Foreground="{StaticResource TextSecondaryBrush}" />
+                                        <!-- Иконка -->
+                                        <icon:MaterialIcon Grid.Column="0"
+                                                           Kind="{Binding IconKind}"
+                                                           Width="16" Height="16"
+                                                           Margin="0,0,6,0"
+                                                           Foreground="{StaticResource TextSecondaryBrush}" />
 
-                                    <!-- Имя задачи -->
-                                    <TextBlock Grid.Column="1"
-                                               Text="{Binding Name}"
-                                               VerticalAlignment="Center" />
+                                        <!-- Имя задачи -->
+                                        <TextBlock Grid.Column="1"
+                                                   Text="{Binding Name}"
+                                                   VerticalAlignment="Center" />
 
-                                    <!-- Toggle для split-частей -->
-                                    <Button Grid.Column="2"
-                                            Visibility="{Binding IsSplitRoot, Converter={StaticResource IsSplitToVisibilityConverter}}"
-                                            Command="{Binding ToggleShowPartsCommand}"
-                                            ToolTip="Показать/скрыть части"
-                                            Background="Transparent"
-                                            BorderThickness="0"
-                                            Padding="2"
-                                            Margin="4,0,0,0">
-                                        <icon:MaterialIcon Width="14" Height="14"
-                                                           Foreground="{StaticResource TextSecondaryBrush}">
-                                            <icon:MaterialIcon.Style>
-                                                <Style TargetType="icon:MaterialIcon">
-                                                    <Setter Property="Kind" Value="ChevronRight" />
-                                                    <Style.Triggers>
-                                                        <DataTrigger Binding="{Binding ShowParts}" Value="True">
-                                                            <Setter Property="Kind" Value="ChevronDown" />
-                                                        </DataTrigger>
-                                                    </Style.Triggers>
-                                                </Style>
-                                            </icon:MaterialIcon.Style>
-                                        </icon:MaterialIcon>
-                                    </Button>
-                                </Grid>
+                                        <!-- Toggle для split-частей -->
+                                        <Button Grid.Column="2"
+                                                Visibility="{Binding IsSplitRoot, Converter={StaticResource IsSplitToVisibilityConverter}}"
+                                                Command="{Binding ToggleShowPartsCommand}"
+                                                ToolTip="Показать/скрыть части"
+                                                Background="Transparent"
+                                                BorderThickness="0"
+                                                Padding="2"
+                                                Margin="4,0,0,0">
+                                            <icon:MaterialIcon Width="14" Height="14"
+                                                               Foreground="{StaticResource TextSecondaryBrush}">
+                                                <icon:MaterialIcon.Style>
+                                                    <Style TargetType="icon:MaterialIcon">
+                                                        <Setter Property="Kind" Value="ChevronRight" />
+                                                        <Style.Triggers>
+                                                            <DataTrigger Binding="{Binding ShowParts}" Value="True">
+                                                                <Setter Property="Kind" Value="ChevronDown" />
+                                                            </DataTrigger>
+                                                        </Style.Triggers>
+                                                    </Style>
+                                                </icon:MaterialIcon.Style>
+                                            </icon:MaterialIcon>
+                                        </Button>
+                                    </Grid>
+                                </Border>
                             </HierarchicalDataTemplate>
                         </TreeView.ItemTemplate>
                     </TreeView>
@@ -246,6 +310,7 @@
                               Style="{StaticResource TaskDataGridStyle}"
                               ItemsSource="{Binding FlatTasks}"
                               SelectedItem="{Binding SelectedTaskItem, Mode=TwoWay}"
+                              ContextMenu="{StaticResource TaskContextMenu}"
                               Margin="4">
                         <DataGrid.Columns>
                             <!-- Название с иконкой и отступом -->

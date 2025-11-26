@@ -10,6 +10,7 @@
     <converters1:NotNullToBoolConverter x:Key="NotNullToBoolConverter" />
     <converters1:BoolToEditModeHeaderConverter x:Key="BoolToEditModeHeaderConverter" />
     <converters1:BoolToSaveAddConverter x:Key="BoolToSaveAddConverter" />
+    <converters1:CountToBoolConverter x:Key="CountToBoolConverter"/>
 
     <!-- Шрифты -->
     <FontFamily x:Key="DefaultFontFamily">Segoe UI</FontFamily>
