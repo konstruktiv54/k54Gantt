@@ -1,10 +1,14 @@
+using System.Collections.ObjectModel;
+using System.Timers;
 using System.Windows;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Core.Services;
 using Microsoft.Win32;
+using Wpf.Services;
 using Wpf.Views;
 using Task = Core.Interfaces.Task;
+using Timer = System.Timers.Timer;
 
 namespace Wpf.ViewModels;
 
@@ -21,6 +25,15 @@ public partial class MainViewModel : ObservableObject
 
     #endregion
 
+    #region Private Fields
+
+    private TaskHierarchyBuilder? _hierarchyBuilder;
+    private bool _isSyncingSelection;
+    private Timer? _flatListUpdateTimer;
+    private const int DebounceDelayMs = 50;
+
+    #endregion
+
     #region Observable Properties
 
     /// <summary>
@@ -28,6 +41,15 @@ public partial class MainViewModel : ObservableObject
     /// </summary>
     [ObservableProperty]
     private ProjectManager? _projectManager;
+
+    partial void OnProjectManagerChanged(ProjectManager? value)
+    {
+        if (value != null)
+        {
+            InitializeHierarchyBuilder();
+            RebuildHierarchy();
+        }
+    }
 
     /// <summary>
     /// Путь к текущему файлу проекта.
@@ -54,10 +76,36 @@ public partial class MainViewModel : ObservableObject
     private int _zoomLevel = 100;
 
     /// <summary>
-    /// Выбранная задача.
+    /// Выбранная задача (Core.Task для GanttChart).
     /// </summary>
     [ObservableProperty]
     private Task? _selectedTask;
+
+    partial void OnSelectedTaskChanged(Task? value)
+    {
+        if (_isSyncingSelection) return;
+
+        _isSyncingSelection = true;
+        try
+        {
+            if (value != null && _hierarchyBuilder != null && RootTasks != null)
+            {
+                var vm = _hierarchyBuilder.FindByTaskId(RootTasks, value.Id);
+                if (vm != null && vm != SelectedTaskItem)
+                {
+                    SelectedTaskItem = vm;
+                }
+            }
+            else if (value == null)
+            {
+                SelectedTaskItem = null;
+            }
+        }
+        finally
+        {
+            _isSyncingSelection = false;
+        }
+    }
 
     /// <summary>
     /// Флаг наличия несохранённых изменений.
@@ -73,6 +121,81 @@ public partial class MainViewModel : ObservableObject
 
     #endregion
 
+    #region Sidebar Properties
+
+    /// <summary>
+    /// Корневые элементы для TreeView (иерархическая структура).
+    /// </summary>
+    [ObservableProperty]
+    private ObservableCollection<TaskItemViewModel>? _rootTasks;
+
+    /// <summary>
+    /// Плоский список видимых задач для DataGrid.
+    /// </summary>
+    [ObservableProperty]
+    private ObservableCollection<TaskItemViewModel>? _flatTasks;
+
+    /// <summary>
+    /// Выбранный элемент в TreeView/DataGrid (wrapper).
+    /// </summary>
+    [ObservableProperty]
+    private TaskItemViewModel? _selectedTaskItem;
+
+    partial void OnSelectedTaskItemChanged(TaskItemViewModel? value)
+    {
+        if (_isSyncingSelection) return;
+
+        _isSyncingSelection = true;
+        try
+        {
+            // Снимаем выделение с предыдущего
+            if (FlatTasks != null)
+            {
+                foreach (var item in FlatTasks)
+                {
+                    if (item != value)
+                        item.IsSelected = false;
+                }
+            }
+
+            // Устанавливаем выделение
+            if (value != null)
+            {
+                value.IsSelected = true;
+                SelectedTask = value.Task;
+            }
+            else
+            {
+                SelectedTask = null;
+            }
+        }
+        finally
+        {
+            _isSyncingSelection = false;
+        }
+    }
+
+    /// <summary>
+    /// Глобальный toggle для отображения split-частей.
+    /// </summary>
+    [ObservableProperty]
+    private bool _showAllSplitParts;
+
+    partial void OnShowAllSplitPartsChanged(bool value)
+    {
+        // Сохраняем в настройки
+        SettingsService.ShowAllSplitParts = value;
+
+        // Применяем ко всем split-задачам
+        if (RootTasks != null)
+        {
+            ApplyShowPartsToAll(RootTasks, value);
+            ScheduleFlatListUpdate();
+        }
+    }
+
+    #endregion
+
     #region Constructor
 
     public MainViewModel(FileService fileService, ResourceService resourceService)
@@ -82,6 +205,18 @@ public partial class MainViewModel : ObservableObject
 
         // Связываем FileService с ResourceService
         _fileService.ResourceService = _resourceService;
+
+        // Инициализация коллекций
+        RootTasks = new ObservableCollection<TaskItemViewModel>();
+        FlatTasks = new ObservableCollection<TaskItemViewModel>();
+
+        // Загружаем настройку ShowAllSplitParts
+        _showAllSplitParts = SettingsService.ShowAllSplitParts;
+
+        // Настройка таймера для дебаунса
+        _flatListUpdateTimer = new Timer(DebounceDelayMs);
+        _flatListUpdateTimer.AutoReset = false;
+        _flatListUpdateTimer.Elapsed += OnFlatListUpdateTimerElapsed;
 
         // Создаём новый проект по умолчанию
         CreateNewProject();
@@ -257,6 +392,32 @@ public partial class MainViewModel : ObservableObject
         StatusText = "Масштаб: 100%";
     }
 
+    /// <summary>
+    /// Команда: Развернуть все группы.
+    /// </summary>
+    [RelayCommand]
+    private void ExpandAll()
+    {
+        if (RootTasks != null)
+        {
+            SetExpandedStateRecursive(RootTasks, true);
+            ScheduleFlatListUpdate();
+        }
+    }
+
+    /// <summary>
+    /// Команда: Свернуть все группы.
+    /// </summary>
+    [RelayCommand]
+    private void CollapseAll()
+    {
+        if (RootTasks != null)
+        {
+            SetExpandedStateRecursive(RootTasks, false);
+            ScheduleFlatListUpdate();
+        }
+    }
+
     #endregion
 
     #region Resource Commands
@@ -267,17 +428,17 @@ public partial class MainViewModel : ObservableObject
     [RelayCommand]
     private void ManageResources()
     {
-        var dialog = new Views.ResourceManagerDialog(_resourceService)
+        var dialog = new ResourceManagerDialog(_resourceService)
         {
             Owner = Application.Current.MainWindow
         };
 
         dialog.ShowDialog();
-    
+
         // Перерисовываем диаграмму для обновления инициалов
         StatusText = $"Ресурсов: {_resourceService.ResourceCount}";
     }
-    
+
     /// <summary>
     /// Команда: Назначить ресурсы на выбранную задачу.
     /// </summary>
@@ -305,7 +466,7 @@ public partial class MainViewModel : ObservableObject
             return;
         }
 
-        var dialog = new Views.AssignResourceDialog(_resourceService, SelectedTask)
+        var dialog = new AssignResourceDialog(_resourceService, SelectedTask)
         {
             Owner = Application.Current.MainWindow
         };
@@ -313,16 +474,16 @@ public partial class MainViewModel : ObservableObject
         if (dialog.ShowDialog() == true && dialog.HasChanges)
         {
             MarkAsModified();
-            
+
             // Принудительная перерисовка диаграммы
             if (Application.Current.MainWindow is MainWindow mainWindow)
             {
                 mainWindow.RefreshChart();
             }
-        
+
             // Уведомляем UI о необходимости перерисовки
             OnPropertyChanged(nameof(ResourceService));
-        
+
             StatusText = $"Ресурсы назначены на '{SelectedTask.Name}'";
         }
     }
@@ -380,6 +541,28 @@ public partial class MainViewModel : ObservableObject
     {
         HasUnsavedChanges = true;
         UpdateWindowTitle();
+    }
+
+    /// <summary>
+    /// Обновляет TaskItemViewModel после изменения задачи на диаграмме.
+    /// </summary>
+    public void OnTaskModified(Task task)
+    {
+        if (_hierarchyBuilder != null && RootTasks != null)
+        {
+            var vm = _hierarchyBuilder.FindByTaskId(RootTasks, task.Id);
+            vm?.Refresh();
+        }
+        MarkAsModified();
+    }
+
+    /// <summary>
+    /// Полная перестройка иерархии (после добавления/удаления задач).
+    /// </summary>
+    public void RefreshHierarchy()
+    {
+        RebuildHierarchy();
+        UpdateTaskCount();
     }
 
     #endregion
@@ -491,15 +674,13 @@ public partial class MainViewModel : ObservableObject
         ProjectManager.SetDuration(task8, TimeSpan.FromDays(1));
         ProjectManager.Relate(task7, task8);
 
-        OnPropertyChanged(nameof(ProjectManager));
-        var temp = ProjectManager;
-        ProjectManager = null;
-        ProjectManager = temp;
+        // Перестраиваем иерархию
+        RebuildHierarchy();
 
         UpdateTaskCount();
         HasUnsavedChanges = true;
         UpdateWindowTitle();
-        StatusText = "Создан демо-проект с 8 задачами";
+        StatusText = "Создан демо-проект с 11 задачами";
     }
 
     private void SaveToFile(string filePath)
@@ -528,7 +709,7 @@ public partial class MainViewModel : ObservableObject
     {
         var fileName = string.IsNullOrEmpty(CurrentFilePath)
             ? "Новый проект"
-            : System.IO.Path.GetFileName((string?)CurrentFilePath);
+            : System.IO.Path.GetFileName(CurrentFilePath);
 
         var modified = HasUnsavedChanges ? " *" : "";
 
@@ -541,9 +722,101 @@ public partial class MainViewModel : ObservableObject
     }
 
     #endregion
-    
+
+    #region Hierarchy Methods
+
+    private void InitializeHierarchyBuilder()
+    {
+        if (ProjectManager == null) return;
+
+        _hierarchyBuilder = new TaskHierarchyBuilder(
+            ProjectManager,
+            OnExpandChanged,
+            OnShowPartsChanged);
+    }
+
+    private void RebuildHierarchy()
+    {
+        if (_hierarchyBuilder == null || ProjectManager == null) return;
+
+        RootTasks = _hierarchyBuilder.BuildHierarchy();
+
+        // Применяем глобальную настройку ShowAllSplitParts
+        if (ShowAllSplitParts)
+        {
+            ApplyShowPartsToAll(RootTasks, true);
+        }
+
+        UpdateFlatList();
+    }
+
+    private void UpdateFlatList()
+    {
+        if (_hierarchyBuilder == null || RootTasks == null) return;
+
+        FlatTasks = _hierarchyBuilder.BuildFlatList(RootTasks);
+    }
+
+    private void OnExpandChanged()
+    {
+        ScheduleFlatListUpdate();
+    }
+
+    private void OnShowPartsChanged(TaskItemViewModel splitVm)
+    {
+        _hierarchyBuilder?.RebuildSplitChildren(splitVm);
+        ScheduleFlatListUpdate();
+    }
+
+    private void ScheduleFlatListUpdate()
+    {
+        _flatListUpdateTimer?.Stop();
+        _flatListUpdateTimer?.Start();
+    }
+
+    private void OnFlatListUpdateTimerElapsed(object? sender, ElapsedEventArgs e)
+    {
+        Application.Current?.Dispatcher.Invoke(UpdateFlatList);
+    }
+
+    private void SetExpandedStateRecursive(ObservableCollection<TaskItemViewModel> items, bool expanded)
+    {
+        foreach (var item in items)
+        {
+            if (item.IsGroup)
+            {
+                item.IsExpanded = expanded;
+            }
+            if (item.Children.Count > 0)
+            {
+                SetExpandedStateRecursive(item.Children, expanded);
+            }
+        }
+    }
+
+    private void ApplyShowPartsToAll(ObservableCollection<TaskItemViewModel> items, bool showParts)
+    {
+        foreach (var item in items)
+        {
+            if (item.IsSplitRoot)
+            {
+                item.ShowParts = showParts;
+            }
+            if (item.Children.Count > 0)
+            {
+                ApplyShowPartsToAll(item.Children, showParts);
+            }
+        }
+    }
+
+    #endregion
+
+    #region Public Properties
+
     /// <summary>
     /// Сервис ресурсов (для binding).
     /// </summary>
     public ResourceService ResourceService => _resourceService;
+
+    #endregion
 }

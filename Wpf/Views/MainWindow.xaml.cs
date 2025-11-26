@@ -19,6 +19,17 @@ public partial class MainWindow : Window
         Loaded += OnLoaded;
         Closing += OnClosing;
     }
+    
+    /// <summary>
+    /// Обработчик изменения выделения в TreeView.
+    /// </summary>
+    private void TaskTreeView_SelectedItemChanged(object sender, RoutedPropertyChangedEventArgs<object> e)
+    {
+        if (DataContext is MainViewModel vm && e.NewValue is TaskItemViewModel selectedItem)
+        {
+            vm.SelectedTaskItem = selectedItem;
+        }
+    }
 
     private void OnLoaded(object sender, RoutedEventArgs e)
     {

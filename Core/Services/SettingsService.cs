@@ -67,6 +67,19 @@ public static class SettingsService
         }
     }
     
+    /// <summary>
+    /// Глобальный toggle для отображения split-частей.
+    /// </summary>
+    public static bool ShowAllSplitParts
+    {
+        get
+        {
+            var value = GetSetting("ShowAllSplitParts");
+            return bool.TryParse(value, out var show) && show;
+        }
+        set => SetSetting("ShowAllSplitParts", value.ToString());
+    }
+    
         /// <summary>
     /// Масштаб по умолчанию.
     /// </summary>
