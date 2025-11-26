@@ -1,0 +1,9 @@
+bin/
+obj/
+/packages/
+riderModule.iml
+/_ReSharper.Caches/
+# IntelliJ IDEA / PyCharm / WebStorm
+.idea/
+*.iml
+out/
