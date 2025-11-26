@@ -45,7 +45,8 @@
         <converters:LevelToMarginConverter x:Key="LevelToMarginConverter" IndentSize="16"/>
         <converters:IsSplitToVisibilityConverter x:Key="IsSplitToVisibilityConverter"/>
         <converters:CountToBoolConverter x:Key="CountToBoolConverter"/>
-        <ContextMenu x:Key="TaskContextMenu">
+        <ContextMenu x:Key="TaskContextMenu" 
+                     DataContext="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource Self}}">
             <MenuItem Header="Добавить задачу" 
                       Command="{Binding AddTaskCommand}"/>
             <MenuItem Header="Добавить подзадачу" 
@@ -419,7 +420,8 @@
                     ProjectManager="{Binding ProjectManager}"
                     ZoomLevel="{Binding ZoomLevel}"
                     SelectedTask="{Binding SelectedTask, Mode=TwoWay}"
-                    ResourceService="{Binding ResourceService}"/>
+                    ResourceService="{Binding ResourceService}"
+                    TaskDoubleClicked="GanttChart_TaskDoubleClicked"/>
             </Border>
         </Grid>
     </DockPanel>

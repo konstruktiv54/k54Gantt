@@ -46,6 +46,55 @@ public partial class MainWindow : Window
             }
         }
     }
+    
+    /// <summary>
+    /// Обработчик двойного клика по задаче на диаграмме.
+    /// </summary>
+    private void GanttChart_TaskDoubleClicked(object? sender, Core.Interfaces.Task task)
+    {
+        if (DataContext is MainViewModel vm && vm.ProjectManager != null)
+        {
+            // Если это группа — toggle collapse
+            if (vm.ProjectManager.IsGroup(task))
+            {
+                task.IsCollapsed = !task.IsCollapsed;
+            
+                // Синхронизируем с TaskItemViewModel
+                if (vm.RootTasks != null)
+                {
+                    var taskVm = FindTaskViewModel(vm.RootTasks, task.Id);
+                    if (taskVm != null)
+                    {
+                        taskVm.IsExpanded = !task.IsCollapsed;
+                    }
+                }
+            
+                GanttChart.Refresh();
+            }
+        }
+    }
+
+    /// <summary>
+    /// Рекурсивный поиск TaskItemViewModel по ID.
+    /// </summary>
+    private TaskItemViewModel? FindTaskViewModel(
+        System.Collections.ObjectModel.ObservableCollection<TaskItemViewModel> items, 
+        Guid taskId)
+    {
+        foreach (var item in items)
+        {
+            if (item.Id == taskId)
+                return item;
+        
+            if (item.Children.Count > 0)
+            {
+                var found = FindTaskViewModel(item.Children, taskId);
+                if (found != null)
+                    return found;
+            }
+        }
+        return null;
+    }
 
     private void OnLoaded(object sender, RoutedEventArgs e)
     {

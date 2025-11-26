@@ -30,7 +30,7 @@ public class Task
     /// Get the start time of this Task relative to the project start
     /// </summary>
     [JsonProperty("Start")]
-    public TimeSpan Start { get; internal set; }
+    public TimeSpan Start { get; set; }
 
     /// <summary>
     /// Get the end time of this Task relative to the project start

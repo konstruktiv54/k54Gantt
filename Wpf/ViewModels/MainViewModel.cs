@@ -549,6 +549,7 @@ public partial class MainViewModel : ObservableObject
 
     /// <summary>
     /// Команда: Добавить задачу.
+    /// Создаёт задачу рядом с выбранной (sibling) или в корне.
     /// </summary>
     [RelayCommand]
     private void AddTask()
@@ -560,19 +561,17 @@ public partial class MainViewModel : ObservableObject
         ProjectManager.SetStart(newTask, TimeSpan.Zero);
         ProjectManager.SetDuration(newTask, TimeSpan.FromDays(5));
 
-        // Если выбрана задача — добавляем как child
-        if (SelectedTaskItem != null && !SelectedTaskItem.IsPart)
+        // Если выбрана задача — добавляем как sibling (в ту же группу)
+        if (SelectedTaskItem != null)
         {
-            // Если выбранная задача ещё не группа — делаем её группой
-            if (!SelectedTaskItem.IsGroup)
-            {
-                // Задача станет группой автоматически при добавлении child
-            }
+            var parentGroup = ProjectManager.DirectGroupOf(SelectedTaskItem.Task);
+            ProjectManager.Group(parentGroup, newTask);
+            // Если родителя нет — задача остаётся в корне
 
-            ProjectManager.Group(SelectedTaskItem.Task, newTask);
+            // Устанавливаем начало как у выбранной задачи
+            newTask.Start = SelectedTaskItem.Task.Start;
         }
 
-        // Перестраиваем иерархию и выделяем новую задачу
         RebuildHierarchy();
         SelectTaskById(newTask.Id);
 
@@ -1099,6 +1098,21 @@ public partial class MainViewModel : ObservableObject
         }
 
         UpdateFlatList();
+        UpdateTaskCount();
+
+        // Перерисовываем GanttChart
+        RefreshGanttChart();
+    }
+    
+    /// <summary>
+    /// Перерисовывает GanttChart.
+    /// </summary>
+    private void RefreshGanttChart()
+    {
+        if (Application.Current?.MainWindow is MainWindow mainWindow)
+        {
+            mainWindow.RefreshChart();
+        }
     }
 
     private void UpdateFlatList()
