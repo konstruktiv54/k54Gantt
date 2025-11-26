@@ -3,6 +3,7 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
 using System.Windows.Shapes;
+using Core.Services;
 using Wpf.Controls;
 using Task = Core.Interfaces.Task;
 
@@ -15,6 +16,7 @@ namespace Wpf.Rendering;
 public class TaskRenderer
 {
     private readonly GanttChartControl _control;
+    private ResourceService? _resourceService;
 
     // Кэшированные кисти
     private Brush? _taskBarBrush;
@@ -26,6 +28,11 @@ public class TaskRenderer
     public TaskRenderer(GanttChartControl control)
     {
         _control = control;
+    }
+    
+    public void SetResourceService(ResourceService resourceService)
+    {
+        _resourceService = resourceService;
     }
 
     /// <summary>
@@ -310,9 +317,12 @@ public class TaskRenderer
 
     private void RenderTaskName(Canvas canvas, Task task, double x, double y, double width, double height)
     {
+        // Инициалы ресурсов НАД баром
+        RenderResourceInitials(canvas, task, x, y, width);
+
+        // Имя задачи справа от бара
         var name = task.Name ?? "Без названия";
-        
-        // Ограничиваем длину имени
+    
         if (name.Length > 30)
             name = name.Substring(0, 27) + "...";
 
@@ -325,12 +335,61 @@ public class TaskRenderer
 
         nameText.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
 
-        // Позиционируем текст справа от бара
         var textX = x + width + 8;
         var textY = y + (height - nameText.DesiredSize.Height) / 2;
 
         Canvas.SetLeft(nameText, textX);
         Canvas.SetTop(nameText, textY);
         canvas.Children.Add(nameText);
+    }
+    
+    private void RenderResourceInitials(Canvas canvas, Task task, double x, double y, double width)
+    {
+        if (_resourceService == null)
+            return;
+
+        var initials = _resourceService.GetInitialsForTask(task.Id, ", ");
+    
+        if (string.IsNullOrEmpty(initials))
+            return;
+
+        // Получаем ресурсы для определения цвета (берём цвет первого ресурса)
+        var resources = _resourceService.GetResourcesForTask(task.Id).ToList();
+        Brush textBrush = _control.FindResource("TextSecondaryBrush") as Brush ?? Brushes.Gray;
+
+        if (resources.Count > 0 && !string.IsNullOrEmpty(resources[0].ColorHex))
+        {
+            try
+            {
+                var color = (Color)ColorConverter.ConvertFromString(resources[0].ColorHex);
+                textBrush = new SolidColorBrush(color);
+            }
+            catch
+            {
+                // Используем цвет по умолчанию
+            }
+        }
+
+        var initialsText = new TextBlock
+        {
+            Text = initials,
+            FontSize = 9,
+            FontWeight = FontWeights.SemiBold,
+            Foreground = textBrush
+        };
+
+        initialsText.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
+
+        // Позиционируем над баром по центру
+        var textX = x + (width - initialsText.DesiredSize.Width) / 2;
+        var textY = y - initialsText.DesiredSize.Height - 2;
+
+        // Не показываем если выходит за верхнюю границу
+        if (textY < 0)
+            textY = y - 12; // Показываем чуть выше если места совсем мало
+
+        Canvas.SetLeft(initialsText, Math.Max(x, textX));
+        Canvas.SetTop(initialsText, Math.Max(0, textY));
+        canvas.Children.Add(initialsText);
     }
 }

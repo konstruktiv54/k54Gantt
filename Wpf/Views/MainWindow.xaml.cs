@@ -1,9 +1,8 @@
-﻿// GanttChart.WPF/Views/MainWindow.xaml.cs
-using System.ComponentModel;
+﻿using System.ComponentModel;
 using System.Windows;
 using Wpf.ViewModels;
 
-namespace k54Gantt;
+namespace Wpf.Views;
 
 /// <summary>
 /// Главное окно приложения.
@@ -24,6 +23,11 @@ public partial class MainWindow : Window
     private void OnLoaded(object sender, RoutedEventArgs e)
     {
         ViewModel?.LoadLastOpenedFile();
+    }
+    
+    public void RefreshChart()
+    {
+        GanttChart.InvalidateChart();
     }
 
     private void OnClosing(object? sender, CancelEventArgs e)

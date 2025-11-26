@@ -29,6 +29,32 @@ public partial class GanttChartControl : UserControl
     #region Dependency Properties
 
     /// <summary>
+    /// Сервис ресурсов для отображения инициалов.
+    /// </summary>
+    public static readonly DependencyProperty ResourceServiceProperty =
+        DependencyProperty.Register(
+            nameof(ResourceService),
+            typeof(ResourceService),
+            typeof(GanttChartControl),
+            new PropertyMetadata(null, OnResourceServiceChanged));
+
+    public ResourceService? ResourceService
+    {
+        get => (ResourceService?)GetValue(ResourceServiceProperty);
+        set => SetValue(ResourceServiceProperty, value);
+    }
+    
+    private static void OnResourceServiceChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
+    {
+        if (d is not GanttChartControl control) return;
+        if (e.NewValue is ResourceService service)
+        {
+            control._taskRenderer.SetResourceService(service);
+        }
+        control.InvalidateChart();
+    }
+    
+    /// <summary>
     /// Менеджер проекта с задачами.
     /// </summary>
     public static readonly DependencyProperty ProjectManagerProperty =
@@ -223,10 +249,12 @@ public partial class GanttChartControl : UserControl
         // Подписка на события
         Loaded += OnLoaded;
         SizeChanged += OnSizeChanged;
-        MouseWheel += OnMouseWheel;
-        MouseLeftButtonDown += OnMouseLeftButtonDown;
-        MouseLeftButtonUp += OnMouseLeftButtonUp;
-        MouseMove += OnMouseMove;
+    
+        // ВАЖНО: Используем Preview события, чтобы перехватить до ScrollViewer
+        PreviewMouseWheel += OnPreviewMouseWheel;
+        PreviewMouseLeftButtonDown += OnPreviewMouseLeftButtonDown;
+        PreviewMouseLeftButtonUp += OnPreviewMouseLeftButtonUp;
+        PreviewMouseMove += OnPreviewMouseMove;
     }
 
     #endregion
@@ -287,8 +315,8 @@ public partial class GanttChartControl : UserControl
         // Синхронизация горизонтального скролла заголовка с основным контентом
         HeaderScrollViewer.ScrollToHorizontalOffset(e.HorizontalOffset);
     }
-
-    private void OnMouseWheel(object sender, MouseWheelEventArgs e)
+    
+    private void OnPreviewMouseWheel(object sender, MouseWheelEventArgs e)
     {
         // Ctrl + Wheel = Zoom
         if (Keyboard.Modifiers == ModifierKeys.Control)
@@ -296,12 +324,14 @@ public partial class GanttChartControl : UserControl
             var delta = e.Delta > 0 ? 10 : -10;
             var newZoom = Math.Clamp(ZoomLevel + delta, 50, 200);
             ZoomLevel = newZoom;
-            e.Handled = true;
+            e.Handled = true; // Предотвращаем скролл
         }
+        // Без Ctrl - позволяем ScrollViewer обрабатывать скролл
     }
-
-    private void OnMouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+    
+    private void OnPreviewMouseLeftButtonDown(object sender, MouseButtonEventArgs e)
     {
+        // Получаем позицию относительно TaskLayer
         var position = e.GetPosition(TaskLayer);
         var task = HitTestTask(position);
 
@@ -314,12 +344,25 @@ public partial class GanttChartControl : UserControl
             {
                 TaskDoubleClicked?.Invoke(this, task);
             }
+        
+            // НЕ ставим e.Handled = true, чтобы ScrollViewer мог обрабатывать drag для скролла
         }
         else
         {
             SelectedTask = null;
         }
     }
+    
+    private void OnPreviewMouseLeftButtonUp(object sender, MouseButtonEventArgs e)
+    {
+        // TODO: Завершение drag операции
+    }
+
+    private void OnPreviewMouseMove(object sender, MouseEventArgs e)
+    {
+        // TODO: Drag preview и tooltip
+    }
+    
 
     private void OnMouseLeftButtonUp(object sender, MouseButtonEventArgs e)
     {
@@ -353,6 +396,15 @@ public partial class GanttChartControl : UserControl
         {
             _isRendering = false;
         }
+    }
+    
+    /// <summary>
+    /// Принудительно перерисовывает диаграмму.
+    /// Вызывается извне при изменении данных.
+    /// </summary>
+    public void Refresh()
+    {
+        InvalidateChart();
     }
 
     /// <summary>
@@ -551,13 +603,15 @@ public partial class GanttChartControl : UserControl
         if (ProjectManager == null)
             return null;
 
+        // Получаем список ВИДИМЫХ задач (не скрытых в свёрнутых группах)
+        var visibleTasks = GetVisibleTasks();
+    
         var rowIndex = (int)(position.Y / RowHeight);
-        var tasks = ProjectManager.Tasks;
 
-        if (rowIndex < 0 || rowIndex >= tasks.Count)
+        if (rowIndex < 0 || rowIndex >= visibleTasks.Count)
             return null;
 
-        var task = tasks[rowIndex];
+        var task = visibleTasks[rowIndex];
 
         // Проверяем, попали ли мы в бар задачи по X
         var taskX = task.Start.Days * ColumnWidth;
@@ -568,7 +622,54 @@ public partial class GanttChartControl : UserControl
             return task;
         }
 
+        // Также проверяем клик по имени задачи (справа от бара)
+        var nameAreaX = taskX + taskWidth;
+        var nameAreaWidth = 200; // примерная ширина области имени
+
+        if (position.X >= nameAreaX && position.X <= nameAreaX + nameAreaWidth)
+        {
+            return task;
+        }
+
         return null;
+    }
+
+    /// <summary>
+    /// Возвращает список видимых задач (исключая скрытые в свёрнутых группах).
+    /// </summary>
+    private List<Task> GetVisibleTasks()
+    {
+        if (ProjectManager == null)
+            return new List<Task>();
+
+        var result = new List<Task>();
+
+        foreach (var task in ProjectManager.Tasks)
+        {
+            if (!IsTaskHidden(task))
+            {
+                result.Add(task);
+            }
+        }
+
+        return result;
+    }
+
+    /// <summary>
+    /// Проверяет, скрыта ли задача (находится в свёрнутой группе).
+    /// </summary>
+    private bool IsTaskHidden(Task task)
+    {
+        if (ProjectManager == null)
+            return false;
+
+        foreach (var group in ProjectManager.GroupsOf(task))
+        {
+            if (group.IsCollapsed)
+                return true;
+        }
+
+        return false;
     }
 
     #endregion

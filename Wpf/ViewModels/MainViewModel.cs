@@ -3,6 +3,7 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Core.Services;
 using Microsoft.Win32;
+using Wpf.Views;
 using Task = Core.Interfaces.Task;
 
 namespace Wpf.ViewModels;
@@ -266,8 +267,64 @@ public partial class MainViewModel : ObservableObject
     [RelayCommand]
     private void ManageResources()
     {
-        // TODO: Открыть диалог управления ресурсами
-        StatusText = "Управление ресурсами (в разработке)";
+        var dialog = new Views.ResourceManagerDialog(_resourceService)
+        {
+            Owner = Application.Current.MainWindow
+        };
+
+        dialog.ShowDialog();
+    
+        // Перерисовываем диаграмму для обновления инициалов
+        StatusText = $"Ресурсов: {_resourceService.ResourceCount}";
+    }
+    
+    /// <summary>
+    /// Команда: Назначить ресурсы на выбранную задачу.
+    /// </summary>
+    [RelayCommand]
+    private void AssignResources()
+    {
+        if (SelectedTask == null)
+        {
+            StatusText = "Выберите задачу для назначения ресурсов";
+            return;
+        }
+
+        if (_resourceService.ResourceCount == 0)
+        {
+            var result = MessageBox.Show(
+                "Нет доступных ресурсов. Открыть управление ресурсами?",
+                "Нет ресурсов",
+                MessageBoxButton.YesNo,
+                MessageBoxImage.Question);
+
+            if (result == MessageBoxResult.Yes)
+            {
+                ManageResources();
+            }
+            return;
+        }
+
+        var dialog = new Views.AssignResourceDialog(_resourceService, SelectedTask)
+        {
+            Owner = Application.Current.MainWindow
+        };
+
+        if (dialog.ShowDialog() == true && dialog.HasChanges)
+        {
+            MarkAsModified();
+            
+            // Принудительная перерисовка диаграммы
+            if (Application.Current.MainWindow is MainWindow mainWindow)
+            {
+                mainWindow.RefreshChart();
+            }
+        
+            // Уведомляем UI о необходимости перерисовки
+            OnPropertyChanged(nameof(ResourceService));
+        
+            StatusText = $"Ресурсы назначены на '{SelectedTask.Name}'";
+        }
     }
 
     #endregion
@@ -434,6 +491,11 @@ public partial class MainViewModel : ObservableObject
         ProjectManager.SetDuration(task8, TimeSpan.FromDays(1));
         ProjectManager.Relate(task7, task8);
 
+        OnPropertyChanged(nameof(ProjectManager));
+        var temp = ProjectManager;
+        ProjectManager = null;
+        ProjectManager = temp;
+
         UpdateTaskCount();
         HasUnsavedChanges = true;
         UpdateWindowTitle();
@@ -479,4 +541,9 @@ public partial class MainViewModel : ObservableObject
     }
 
     #endregion
+    
+    /// <summary>
+    /// Сервис ресурсов (для binding).
+    /// </summary>
+    public ResourceService ResourceService => _resourceService;
 }

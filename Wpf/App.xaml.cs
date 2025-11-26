@@ -1,8 +1,8 @@
 ﻿using System.Windows;
 using Core.Services;
-using k54Gantt;
 using Microsoft.Extensions.DependencyInjection;
 using Wpf.ViewModels;
+using Wpf.Views;
 
 namespace Wpf;
 

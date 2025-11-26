@@ -1,5 +1,5 @@
 ﻿<!-- GanttChart.WPF/Views/MainWindow.xaml -->
-<Window x:Class="k54Gantt.MainWindow"
+<Window x:Class="Wpf.Views.MainWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
@@ -27,6 +27,8 @@
         <KeyBinding Key="OemPlus" Modifiers="Control" Command="{Binding ZoomInCommand}"/>
         <KeyBinding Key="OemMinus" Modifiers="Control" Command="{Binding ZoomOutCommand}"/>
         <KeyBinding Key="D0" Modifiers="Control" Command="{Binding ZoomResetCommand}"/>
+        <KeyBinding Key="R" Modifiers="Control" Command="{Binding ManageResourcesCommand}"/>
+        <KeyBinding Key="R" Modifiers="Control+Shift" Command="{Binding AssignResourcesCommand}"/>
     </Window.InputBindings>
 
     <!-- ═══════════════════════════════════════════════════════════════ -->
@@ -81,7 +83,12 @@
             <!-- Resources -->
             <MenuItem Header="_Ресурсы">
                 <MenuItem Header="Управление ресурсами..." 
-                          Command="{Binding ManageResourcesCommand}"/>
+                          Command="{Binding ManageResourcesCommand}"
+                          InputGestureText="Ctrl+R"/>
+                <Separator/>
+                <MenuItem Header="Назначить на задачу..." 
+                          Command="{Binding AssignResourcesCommand}"
+                          InputGestureText="Ctrl+Shift+R"/>
             </MenuItem>
 
             <!-- Help -->
@@ -192,7 +199,8 @@
                     x:Name="GanttChart"
                     ProjectManager="{Binding ProjectManager}"
                     ZoomLevel="{Binding ZoomLevel}"
-                    SelectedTask="{Binding SelectedTask, Mode=TwoWay}"/>
+                    SelectedTask="{Binding SelectedTask, Mode=TwoWay}"
+                    ResourceService="{Binding ResourceService}"/>
             </Border>
         </Grid>
     </DockPanel>
