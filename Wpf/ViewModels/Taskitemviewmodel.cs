@@ -18,6 +18,7 @@ public partial class TaskItemViewModel : ObservableObject
     private readonly DateTime _projectStart;
     private readonly Action _onExpandChanged;
     private readonly Action<TaskItemViewModel>? _onShowPartsChanged;
+    private readonly Action? _onTaskModified;
 
     #endregion
 
@@ -40,7 +41,8 @@ public partial class TaskItemViewModel : ObservableObject
         int level = 0,
         TaskItemViewModel? parent = null,
         Action? onExpandChanged = null,
-        Action<TaskItemViewModel>? onShowPartsChanged = null)
+        Action<TaskItemViewModel>? onShowPartsChanged = null,
+        Action? onTaskModified = null)
     {
         Task = task ?? throw new ArgumentNullException(nameof(task));
         _manager = manager ?? throw new ArgumentNullException(nameof(manager));
@@ -49,6 +51,7 @@ public partial class TaskItemViewModel : ObservableObject
         Parent = parent;
         _onExpandChanged = onExpandChanged ?? (() => { });
         _onShowPartsChanged = onShowPartsChanged;
+        _onTaskModified = onTaskModified;
 
         // Инициализация состояния
         _isExpanded = !task.IsCollapsed;
@@ -93,6 +96,7 @@ public partial class TaskItemViewModel : ObservableObject
             {
                 Task.Name = value;
                 OnPropertyChanged();
+                _onTaskModified?.Invoke();
             }
         }
     }
@@ -115,6 +119,7 @@ public partial class TaskItemViewModel : ObservableObject
                 _manager.SetStart(Task, newStart);
                 OnPropertyChanged();
                 OnPropertyChanged(nameof(EndDate));
+                _onTaskModified?.Invoke();
             }
         }
     }
@@ -140,6 +145,7 @@ public partial class TaskItemViewModel : ObservableObject
                 _manager.SetDuration(Task, newDuration);
                 OnPropertyChanged();
                 OnPropertyChanged(nameof(EndDate));
+                _onTaskModified?.Invoke();
             }
         }
     }
@@ -160,6 +166,7 @@ public partial class TaskItemViewModel : ObservableObject
             {
                 _manager.SetComplete(Task, newComplete);
                 OnPropertyChanged();
+                _onTaskModified?.Invoke();
             }
         }
     }

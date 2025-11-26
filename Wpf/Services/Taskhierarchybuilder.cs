@@ -15,6 +15,7 @@ public class TaskHierarchyBuilder
     private readonly ProjectManager _manager;
     private readonly Action _onExpandChanged;
     private readonly Action<ViewModels.TaskItemViewModel>? _onShowPartsChanged;
+    private readonly Action? _onTaskModified;
 
     #endregion
 
@@ -29,11 +30,13 @@ public class TaskHierarchyBuilder
     public TaskHierarchyBuilder(
         ProjectManager manager,
         Action onExpandChanged,
-        Action<ViewModels.TaskItemViewModel>? onShowPartsChanged = null)
+        Action<ViewModels.TaskItemViewModel>? onShowPartsChanged = null,
+        Action? onTaskModified = null)
     {
         _manager = manager ?? throw new ArgumentNullException(nameof(manager));
         _onExpandChanged = onExpandChanged;
         _onShowPartsChanged = onShowPartsChanged;
+        _onTaskModified = onTaskModified;
     }
 
     #endregion
@@ -79,7 +82,8 @@ public class TaskHierarchyBuilder
                 level,
                 parentVm,
                 _onExpandChanged,
-                _onShowPartsChanged);
+                _onShowPartsChanged,
+                _onTaskModified);
 
             viewModelMap[task.Id] = vm;
 
@@ -150,7 +154,8 @@ public class TaskHierarchyBuilder
                     splitVm.Level + 1,
                     splitVm,
                     _onExpandChanged,
-                    null);
+                    null,
+                    _onTaskModified);
 
                 splitVm.Children.Add(partVm);
                 partIndex++;

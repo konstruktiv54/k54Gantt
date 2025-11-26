@@ -732,7 +732,20 @@ public partial class MainViewModel : ObservableObject
         _hierarchyBuilder = new TaskHierarchyBuilder(
             ProjectManager,
             OnExpandChanged,
-            OnShowPartsChanged);
+            OnShowPartsChanged,
+            OnTaskModifiedFromSidebar);
+    }
+    
+    private void OnTaskModifiedFromSidebar()
+    {
+        // Перерисовываем GanttChart
+        if (Application.Current.MainWindow is MainWindow mainWindow)
+        {
+            mainWindow.RefreshChart();
+        }
+
+        // Помечаем как изменённый
+        MarkAsModified();
     }
 
     private void RebuildHierarchy()
