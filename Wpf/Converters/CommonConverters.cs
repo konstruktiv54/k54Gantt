@@ -2,12 +2,11 @@ using System.Globalization;
 using System.Windows;
 using System.Windows.Data;
 using System.Windows.Media;
-using Wpf.ViewModels;
 
 namespace Wpf.Converters;
 
 /// <summary>
-/// Конвертер HEX строки в Color.
+/// Конвертирует HEX строку в Color.
 /// </summary>
 public class HexToColorConverter : IValueConverter
 {
@@ -31,14 +30,14 @@ public class HexToColorConverter : IValueConverter
     {
         if (value is Color color)
         {
-            return color.ToString();
+            return $"#{color.R:X2}{color.G:X2}{color.B:X2}";
         }
         return "#4682B4";
     }
 }
 
 /// <summary>
-/// Конвертер HEX строки в SolidColorBrush.
+/// Конвертирует HEX строку в SolidColorBrush.
 /// </summary>
 public class HexToBrushConverter : IValueConverter
 {
@@ -66,7 +65,7 @@ public class HexToBrushConverter : IValueConverter
 }
 
 /// <summary>
-/// Конвертер bool в Visibility.
+/// Конвертирует bool в Visibility.
 /// </summary>
 public class BoolToVisibilityConverter : IValueConverter
 {
@@ -74,6 +73,10 @@ public class BoolToVisibilityConverter : IValueConverter
     {
         if (value is bool b)
         {
+            // Если parameter = "Inverse", инвертируем логику
+            if (parameter is string s && s.Equals("Inverse", StringComparison.OrdinalIgnoreCase))
+                return b ? Visibility.Collapsed : Visibility.Visible;
+            
             return b ? Visibility.Visible : Visibility.Collapsed;
         }
         return Visibility.Collapsed;
@@ -90,7 +93,7 @@ public class BoolToVisibilityConverter : IValueConverter
 }
 
 /// <summary>
-/// Конвертер not-null в bool.
+/// Конвертирует не-null объект в true.
 /// </summary>
 public class NotNullToBoolConverter : IValueConverter
 {
@@ -106,17 +109,17 @@ public class NotNullToBoolConverter : IValueConverter
 }
 
 /// <summary>
-/// Конвертер bool в текст заголовка (Добавить/Редактировать).
+/// Конвертирует bool (IsEditMode) в заголовок GroupBox.
 /// </summary>
 public class BoolToEditModeHeaderConverter : IValueConverter
 {
     public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
     {
-        if (value is bool isEdit)
+        if (value is bool isEditMode)
         {
-            return isEdit ? "Редактирование" : "Новый ресурс";
+            return isEditMode ? "Редактирование" : "Новый ресурс";
         }
-        return "Новый ресурс";
+        return "Ресурс";
     }
 
     public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
@@ -126,15 +129,15 @@ public class BoolToEditModeHeaderConverter : IValueConverter
 }
 
 /// <summary>
-/// Конвертер bool в текст кнопки (Добавить/Сохранить).
+/// Конвертирует bool (IsEditMode) в текст кнопки "Сохранить"/"Добавить".
 /// </summary>
 public class BoolToSaveAddConverter : IValueConverter
 {
     public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
     {
-        if (value is bool isEdit)
+        if (value is bool isEditMode)
         {
-            return isEdit ? "Сохранить" : "Добавить";
+            return isEditMode ? "Сохранить" : "Добавить";
         }
         return "Добавить";
     }
@@ -142,5 +145,116 @@ public class BoolToSaveAddConverter : IValueConverter
     public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
     {
         throw new NotImplementedException();
+    }
+}
+
+/// <summary>
+/// Конвертирует уровень вложенности в отступ (Margin).
+/// </summary>
+public class LevelToMarginConverter : IValueConverter
+{
+    public double IndentSize { get; set; } = 16;
+
+    public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
+    {
+        if (value is int level)
+        {
+            return new Thickness(level * IndentSize, 0, 0, 0);
+        }
+        return new Thickness(0);
+    }
+
+    public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
+    {
+        throw new NotImplementedException();
+    }
+}
+
+/// <summary>
+/// Конвертирует процент (0-100) в ширину прогресс-бара.
+/// </summary>
+public class PercentToWidthConverter : IValueConverter
+{
+    public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
+    {
+        if (value is int percent && parameter is double maxWidth)
+        {
+            return (percent / 100.0) * maxWidth;
+        }
+        if (value is float percentF && parameter is double maxWidthF)
+        {
+            return percentF * maxWidthF;
+        }
+        return 0.0;
+    }
+
+    public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
+    {
+        throw new NotImplementedException();
+    }
+}
+
+/// <summary>
+/// Мульти-конвертер для определения видимости toggle кнопки split-частей.
+/// Показывает кнопку только если задача является split-задачей.
+/// </summary>
+public class IsSplitToVisibilityConverter : IValueConverter
+{
+    public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
+    {
+        if (value is bool isSplitRoot)
+        {
+            return isSplitRoot ? Visibility.Visible : Visibility.Collapsed;
+        }
+        return Visibility.Collapsed;
+    }
+
+    public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
+    {
+        throw new NotImplementedException();
+    }
+}
+
+/// <summary>
+/// Конвертирует DateTime в строку формата "dd.MM.yyyy".
+/// </summary>
+public class DateToStringConverter : IValueConverter
+{
+    public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
+    {
+        if (value is DateTime date)
+        {
+            return date.ToString("dd.MM.yyyy");
+        }
+        return string.Empty;
+    }
+
+    public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
+    {
+        if (value is string str && DateTime.TryParse(str, out var date))
+        {
+            return date;
+        }
+        return DateTime.Now;
+    }
+}
+
+/// <summary>
+/// Инвертирует bool значение.
+/// </summary>
+public class InverseBoolConverter : IValueConverter
+{
+    public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
+    {
+        if (value is bool b)
+            return !b;
+        return false;
+    }
+
+    public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
+    {
+        if (value is bool b)
+            return !b;
+        return false;
     }
 }

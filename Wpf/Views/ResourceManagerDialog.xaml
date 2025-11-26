@@ -14,6 +14,7 @@
         WindowStartupLocation="CenterOwner"
         ShowInTaskbar="False"
         ResizeMode="CanResize"
+        SizeToContent="Height"
         Background="{StaticResource BackgroundBrush}">
 
     <Window.Resources>
@@ -160,7 +161,7 @@
                         Click="SaveOrAddButton_Click"
                         Style="{StaticResource PrimaryButtonStyle}"
                         Margin="0,0,0,8"/>
-
+                
                 <Button Content="Редактировать"
                         Command="{Binding EditResourceCommand}"
                         IsEnabled="{Binding SelectedResource, Converter={StaticResource NotNullToBoolConverter}}"
