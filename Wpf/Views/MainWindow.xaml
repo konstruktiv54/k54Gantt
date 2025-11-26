@@ -4,6 +4,7 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:controls="clr-namespace:Wpf.Controls"
         xmlns:viewModels="clr-namespace:Wpf.ViewModels"
         mc:Ignorable="d"
         Title="{Binding WindowTitle}"
@@ -40,6 +41,8 @@
             
             <!-- File -->
             <MenuItem Header="_Файл">
+                <MenuItem Header="Создать _демо-проект" 
+                          Command="{Binding CreateDemoProjectCommand}"/>
                 <MenuItem Header="_Новый" 
                           Command="{Binding NewProjectCommand}"
                           InputGestureText="Ctrl+N"/>
@@ -179,26 +182,17 @@
             <!-- SPLITTER -->
             <GridSplitter Grid.Column="1" Style="{StaticResource VerticalSplitterStyle}"/>
 
-            <!-- CHART AREA (placeholder) -->
+            <!-- CHART AREA -->
             <Border Grid.Column="2" 
                     Background="{StaticResource BackgroundBrush}"
                     BorderBrush="{StaticResource GridLineBrush}"
                     BorderThickness="1,0,0,0">
-                
-                <!-- Placeholder для GanttChartControl -->
-                <Grid>
-                    <TextBlock Text="GanttChartControl"
-                               FontSize="24"
-                               Foreground="{StaticResource TextDisabledBrush}"
-                               HorizontalAlignment="Center"
-                               VerticalAlignment="Center"/>
-                    <TextBlock Text="(будет добавлен в Фазе 3)"
-                               FontSize="14"
-                               Foreground="{StaticResource TextDisabledBrush}"
-                               HorizontalAlignment="Center"
-                               VerticalAlignment="Center"
-                               Margin="0,40,0,0"/>
-                </Grid>
+    
+                <controls:GanttChartControl 
+                    x:Name="GanttChart"
+                    ProjectManager="{Binding ProjectManager}"
+                    ZoomLevel="{Binding ZoomLevel}"
+                    SelectedTask="{Binding SelectedTask, Mode=TwoWay}"/>
             </Border>
         </Grid>
     </DockPanel>

@@ -3,6 +3,7 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Core.Services;
 using Microsoft.Win32;
+using Task = Core.Interfaces.Task;
 
 namespace Wpf.ViewModels;
 
@@ -342,6 +343,101 @@ public partial class MainViewModel : ObservableObject
 
         // Очищаем ресурсы
         _resourceService.Clear();
+    }
+
+    /// <summary>
+    /// Создаёт демонстрационный проект с тестовыми данными.
+    /// </summary>
+    [RelayCommand]
+    private void CreateDemoProject()
+    {
+        CreateNewProject();
+
+        if (ProjectManager == null)
+            return;
+
+        // Фаза 1: Планирование
+        var phase1 = new Task { Name = "Фаза 1: Планирование" };
+        ProjectManager.Add(phase1);
+        ProjectManager.SetStart(phase1, TimeSpan.FromDays(0));
+        ProjectManager.SetDuration(phase1, TimeSpan.FromDays(1));
+
+        var task1 = new Task { Name = "Анализ требований" };
+        ProjectManager.Add(task1);
+        ProjectManager.SetStart(task1, TimeSpan.FromDays(0));
+        ProjectManager.SetDuration(task1, TimeSpan.FromDays(5));
+        ProjectManager.SetComplete(task1, 1.0f);
+        ProjectManager.Group(phase1, task1);
+
+        var task2 = new Task { Name = "Техническое задание" };
+        ProjectManager.Add(task2);
+        ProjectManager.SetStart(task2, TimeSpan.FromDays(5));
+        ProjectManager.SetDuration(task2, TimeSpan.FromDays(3));
+        ProjectManager.SetComplete(task2, 0.8f);
+        ProjectManager.Group(phase1, task2);
+        ProjectManager.Relate(task1, task2);
+
+        // Фаза 2: Разработка
+        var phase2 = new Task { Name = "Фаза 2: Разработка" };
+        ProjectManager.Add(phase2);
+        ProjectManager.SetStart(phase2, TimeSpan.FromDays(8));
+        ProjectManager.SetDuration(phase2, TimeSpan.FromDays(1));
+
+        var task3 = new Task { Name = "Разработка Core" };
+        ProjectManager.Add(task3);
+        ProjectManager.SetStart(task3, TimeSpan.FromDays(8));
+        ProjectManager.SetDuration(task3, TimeSpan.FromDays(10));
+        ProjectManager.SetComplete(task3, 0.5f);
+        ProjectManager.Group(phase2, task3);
+        ProjectManager.Relate(task2, task3);
+
+        var task4 = new Task { Name = "Разработка UI" };
+        ProjectManager.Add(task4);
+        ProjectManager.SetStart(task4, TimeSpan.FromDays(12));
+        ProjectManager.SetDuration(task4, TimeSpan.FromDays(8));
+        ProjectManager.SetComplete(task4, 0.3f);
+        ProjectManager.Group(phase2, task4);
+
+        var task5 = new Task { Name = "Интеграция" };
+        ProjectManager.Add(task5);
+        ProjectManager.SetStart(task5, TimeSpan.FromDays(18));
+        ProjectManager.SetDuration(task5, TimeSpan.FromDays(5));
+        ProjectManager.SetComplete(task5, 0.0f);
+        ProjectManager.Group(phase2, task5);
+        ProjectManager.Relate(task3, task5);
+        ProjectManager.Relate(task4, task5);
+
+        // Фаза 3: Тестирование
+        var phase3 = new Task { Name = "Фаза 3: Тестирование" };
+        ProjectManager.Add(phase3);
+        ProjectManager.SetStart(phase3, TimeSpan.FromDays(23));
+        ProjectManager.SetDuration(phase3, TimeSpan.FromDays(1));
+
+        var task6 = new Task { Name = "Юнит-тесты" };
+        ProjectManager.Add(task6);
+        ProjectManager.SetStart(task6, TimeSpan.FromDays(23));
+        ProjectManager.SetDuration(task6, TimeSpan.FromDays(4));
+        ProjectManager.Group(phase3, task6);
+        ProjectManager.Relate(task5, task6);
+
+        var task7 = new Task { Name = "Интеграционные тесты" };
+        ProjectManager.Add(task7);
+        ProjectManager.SetStart(task7, TimeSpan.FromDays(27));
+        ProjectManager.SetDuration(task7, TimeSpan.FromDays(3));
+        ProjectManager.Group(phase3, task7);
+        ProjectManager.Relate(task6, task7);
+
+        // Релиз
+        var task8 = new Task { Name = "Релиз v1.0" };
+        ProjectManager.Add(task8);
+        ProjectManager.SetStart(task8, TimeSpan.FromDays(30));
+        ProjectManager.SetDuration(task8, TimeSpan.FromDays(1));
+        ProjectManager.Relate(task7, task8);
+
+        UpdateTaskCount();
+        HasUnsavedChanges = true;
+        UpdateWindowTitle();
+        StatusText = "Создан демо-проект с 8 задачами";
     }
 
     private void SaveToFile(string filePath)
