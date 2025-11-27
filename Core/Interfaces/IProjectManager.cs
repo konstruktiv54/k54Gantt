@@ -42,7 +42,7 @@ public class Task
     /// Get the duration of this Task in days
     /// </summary>
     [JsonProperty("Duration")]
-    public TimeSpan Duration { get; internal set; }
+    public TimeSpan Duration { get; set; }
 
     /// <summary>
     /// Get or set the pecentage complete of this task, expressed in float between 0.0 and 1.0f.

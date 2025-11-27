@@ -5,6 +5,7 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Core.Services;
 using Microsoft.Win32;
+using Wpf.Controls;
 using Wpf.Services;
 using Wpf.Views;
 using Task = Core.Interfaces.Task;
@@ -845,6 +846,37 @@ public partial class MainViewModel : ObservableObject
 
     #region Public Methods
 
+    /// <summary>
+    /// Обрабатывает завершение drag-операции.
+    /// Синхронизирует sidebar и помечает проект как изменённый.
+    /// </summary>
+    public void OnTaskDragged(TaskDragEventArgs e)
+    {
+        // Обновляем TaskItemViewModel
+        if (_hierarchyBuilder != null && RootTasks != null)
+        {
+            var taskVm = _hierarchyBuilder.FindByTaskId(RootTasks, e.Task.Id);
+            taskVm?.Refresh();
+        }
+
+        // Для Reordering нужно перестроить иерархию
+        if (e.Operation == DragOperation.Reordering && e.OldIndex != e.NewIndex)
+        {
+            RebuildHierarchy();
+        }
+
+        MarkAsModified();
+
+        StatusText = e.Operation switch
+        {
+            DragOperation.Moving => $"Задача '{e.Task.Name}' перемещена",
+            DragOperation.ResizingStart => $"Изменено начало '{e.Task.Name}'",
+            DragOperation.ResizingEnd => $"Изменена длительность '{e.Task.Name}'",
+            DragOperation.Reordering => $"Задача '{e.Task.Name}' переупорядочена",
+            _ => "Готов"
+        };
+    }
+    
     /// <summary>
     /// Загружает последний открытый файл (вызывается при старте).
     /// </summary>

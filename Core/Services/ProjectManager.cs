@@ -1573,4 +1573,5 @@ public class ProjectManager<T, TR> : IProjectManager<T, TR>
             }
         }
     }
+    
 }

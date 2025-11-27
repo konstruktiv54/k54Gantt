@@ -1,6 +1,7 @@
 ﻿using System.ComponentModel;
 using System.Windows;
 using System.Windows.Input;
+using Wpf.Controls;
 using Wpf.ViewModels;
 
 namespace Wpf.Views;
@@ -19,6 +20,7 @@ public partial class MainWindow : Window
         // Загружаем последний файл после инициализации
         Loaded += OnLoaded;
         Closing += OnClosing;
+        GanttChart.TaskDragged += OnGanttChartTaskDragged;
     }
     
     /// <summary>
@@ -71,6 +73,18 @@ public partial class MainWindow : Window
             
                 GanttChart.Refresh();
             }
+        }
+    }
+    
+    /// <summary>
+    /// Обработчик завершения drag-операции на диаграмме.
+    /// </summary>
+    private void OnGanttChartTaskDragged(object? sender, TaskDragEventArgs e)
+    {
+        if (DataContext is MainViewModel vm)
+        {
+            // Синхронизируем изменения с sidebar
+            vm.OnTaskDragged(e);
         }
     }
 
