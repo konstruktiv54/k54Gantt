@@ -1326,10 +1326,12 @@ public class ProjectManager<T, TR> : IProjectManager<T, TR>
 
             if (_mSplitTaskOfPart.ContainsKey(task))
             {
+                // task part belonging to a split task needs special treatment
                 _SetPartEndHelper(task, value);
             }
-            else
+            else // regular task or a split task, which we will treat normally
             {
+                // check bounds
                 var isSplitTask = _mPartsOfSplitTask.ContainsKey(task);
                 T lastPart = null;
                 if (isSplitTask)
@@ -1340,18 +1342,10 @@ public class ProjectManager<T, TR> : IProjectManager<T, TR>
 
                 if (value <= task.Start) value = task.Start + TimeSpan.FromMinutes(30);
 
-                // ═══════════════════════════════════════════════════════════
-                // НОВОЕ: Логика Deadline
-                // Если End >= Deadline, сдвигаем Deadline вместе с End
-                // ═══════════════════════════════════════════════════════════
-                if (task.Deadline.HasValue && value >= task.Deadline.Value)
-                {
-                    // Сохраняем offset между Deadline и End (может быть 0)
-                    var offset = task.Deadline.Value - task.End;
-                    if (offset < TimeSpan.Zero) offset = TimeSpan.Zero;
-                    task.Deadline = value + offset;
-                }
+                // УБРАНО: Логика сдвига Deadline
+                // End теперь может свободно пересекать Deadline
 
+                // assign end value
                 task.End = value;
                 task.Duration = task.End - task.Start;
 

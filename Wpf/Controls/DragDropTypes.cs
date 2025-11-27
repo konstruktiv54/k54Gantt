@@ -10,7 +10,8 @@ public enum DragOperation
     ResizingStart,      // Изменение начала (левый край)
     ResizingEnd,        // Изменение длительности (правый край)
     Reordering,         // Переупорядочивание (вертикально)
-    ProgressAdjusting   // Изменение прогресса (средняя кнопка мыши)
+    ProgressAdjusting,  // Изменение прогресса (средняя кнопка мыши)
+    DeadlineMoving 
 }
 
 /// <summary>
@@ -83,6 +84,11 @@ public class DragState
     /// Активна ли операция перетаскивания.
     /// </summary>
     public bool IsActive => Operation != DragOperation.None && Task != null;
+    
+    /// <summary>
+    /// Оригинальное значение Deadline перед началом drag.
+    /// </summary>
+    public TimeSpan? OriginalDeadline { get; set; }
 }
 
 /// <summary>

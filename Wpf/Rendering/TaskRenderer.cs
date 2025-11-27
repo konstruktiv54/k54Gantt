@@ -428,16 +428,20 @@ public class TaskRenderer
     /// </summary>
     private void RenderTaskName(Canvas canvas, Task task, double x, double y, double width, double height)
     {
+        // Определяем, является ли задача группой
+        var isGroup = _control.ProjectManager?.IsGroup(task) ?? false;
+        
         // Имя задачи справа от бара
         var name = task.Name ?? "Без названия";
     
         if (name.Length > 30)
             name = name.Substring(0, 27) + "...";
-
+        
         var nameText = new TextBlock
         {
             Text = name,
-            FontSize = 11,
+            FontSize = isGroup ? 14 : 11, 
+            FontWeight = isGroup ? FontWeights.Bold : FontWeights.DemiBold,
             Foreground = _control.TryFindResource("TextPrimaryBrush") as Brush ?? Brushes.Black
         };
 
@@ -461,11 +465,11 @@ public class TaskRenderer
         var deadlineX = task.Deadline.Value.Days * _control.ColumnWidth;
         
         // Толщина "стены"
-        const double wallWidth = 4;
+        const double wallWidth = 3;
         
-        // Высота стены (немного выше бара)
-        var wallHeight = barHeight + 8;
-        var wallY = y - 4;
+        // Высота стены = высота бара (НЕ выходит за строку)
+        var wallHeight = barHeight;
+        var wallY = y;
 
         // Основная стена
         var wall = new Rectangle
@@ -481,38 +485,27 @@ public class TaskRenderer
         Canvas.SetTop(wall, wallY);
         canvas.Children.Add(wall);
 
-        // Верхний "флажок" для визуального выделения
+        // Маленький флажок (в пределах или чуть выше бара)
+        const double flagWidth = 6;
+        const double flagHeight = 4;
+
         var flag = new Polygon
         {
             Points = new PointCollection
             {
                 new Point(0, 0),
-                new Point(8, 0),
-                new Point(8, 6),
-                new Point(4, 4),
-                new Point(0, 6)
+                new Point(flagWidth, 0),
+                new Point(flagWidth, flagHeight * 0.7),
+                new Point(flagWidth / 2, flagHeight),
+                new Point(0, flagHeight * 0.7)
             },
             Fill = _deadlineBrush
         };
 
-        Canvas.SetLeft(flag, deadlineX - wallWidth / 2);
-        Canvas.SetTop(flag, wallY - 6);
+        // Флажок чуть выше бара, но в пределах barSpacing
+        Canvas.SetLeft(flag, deadlineX - flagWidth / 2);
+        Canvas.SetTop(flag, wallY - flagHeight);
         canvas.Children.Add(flag);
-
-        // Тень/свечение для эффекта "стены"
-        var glow = new Rectangle
-        {
-            Width = wallWidth + 4,
-            Height = wallHeight,
-            Fill = new SolidColorBrush(Color.FromArgb(50, 244, 67, 54)),
-            RadiusX = 2,
-            RadiusY = 2
-        };
-
-        Canvas.SetLeft(glow, deadlineX - wallWidth / 2 - 2);
-        Canvas.SetTop(glow, wallY);
-        Panel.SetZIndex(glow, -1); // Под основной стеной
-        canvas.Children.Add(glow);
     }
 
     /// <summary>

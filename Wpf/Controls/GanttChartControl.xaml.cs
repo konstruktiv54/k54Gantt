@@ -23,11 +23,13 @@ public partial class GanttChartControl : UserControl
 
     private bool _isRendering;
     
-    // Drag & Drop
-    private readonly DragState _dragState = new();
-    private const double EdgeZoneWidth = 8.0;  // Ширина зоны для resize
+    // Drag & Drop — НЕ readonly, чтобы можно было сбрасывать
+    private DragState? _dragState;
+    private const double EdgeZoneWidth = 8.0;
     private const double MinDurationDays = 1.0;
     private const double PixelsPerProgressPercent = 3.0;
+    private const double DeadlineGrabZone = 8.0;
+    private const int DefaultDeadlineOffsetDays = 5;
     private Dictionary<Guid, (TimeSpan Start, TimeSpan Duration)>? _originalChildPositions;
     
     #endregion
@@ -224,6 +226,22 @@ public partial class GanttChartControl : UserControl
         get => (bool)GetValue(HighlightWeekendsProperty);
         set => SetValue(HighlightWeekendsProperty, value);
     }
+    
+    /// <summary>
+    /// Статусное сообщение для отображения в UI.
+    /// </summary>
+    public static readonly DependencyProperty StatusMessageProperty =
+        DependencyProperty.Register(
+            nameof(StatusMessage),
+            typeof(string),
+            typeof(GanttChartControl),
+            new PropertyMetadata(string.Empty));
+
+    public string StatusMessage
+    {
+        get => (string)GetValue(StatusMessageProperty);
+        set => SetValue(StatusMessageProperty, value);
+    }
 
     #endregion
 
@@ -243,6 +261,11 @@ public partial class GanttChartControl : UserControl
     /// Событие завершения drag-операции (для Undo/Redo).
     /// </summary>
     public event EventHandler<TaskDragEventArgs>? TaskDragged;
+    
+    /// <summary>
+    /// Событие модификации задачи (для обновления UI).
+    /// </summary>
+    public event EventHandler<TaskDragEventArgs>? TaskModified;
 
     #endregion
 
@@ -256,6 +279,7 @@ public partial class GanttChartControl : UserControl
         _gridRenderer = new GridRenderer(this);
         _headerRenderer = new HeaderRenderer(this);
         _taskRenderer = new TaskRenderer(this);
+        Focusable = true;
 
         // Подписка на события
         Loaded += OnLoaded;
@@ -263,13 +287,14 @@ public partial class GanttChartControl : UserControl
     
         // ВАЖНО: Используем Preview события для кнопок мыши,
         // чтобы перехватить ДО ScrollViewer (который блокирует обычные события)
+        KeyDown += OnKeyDown;
         PreviewMouseWheel += OnPreviewMouseWheel;
         PreviewMouseLeftButtonDown += OnPreviewMouseLeftButtonDown;
         PreviewMouseLeftButtonUp += OnPreviewMouseLeftButtonUp;
-        MouseMove += OnMouseMove;  // MouseMove работает без Preview
+        MouseMove += OnMouseMove;
         PreviewKeyDown += OnPreviewKeyDown;
-        PreviewMouseDown += OnPreviewMouseDown;       // Для средней кнопки
-        PreviewMouseUp += OnPreviewMouseUp;           // Для средней кнопки
+        PreviewMouseDown += OnPreviewMouseDown;
+        PreviewMouseUp += OnPreviewMouseUp;
     }
 
     #endregion
@@ -296,7 +321,6 @@ public partial class GanttChartControl : UserControl
     {
         if (d is GanttChartControl control)
         {
-            // Пересчитываем ширину колонки на основе zoom
             var baseWidth = 30.0;
             control.ColumnWidth = baseWidth * control.ZoomLevel / 100.0;
         }
@@ -327,77 +351,71 @@ public partial class GanttChartControl : UserControl
 
     private void OnChartScrollChanged(object sender, ScrollChangedEventArgs e)
     {
-        // Синхронизация горизонтального скролла заголовка с основным контентом
         HeaderScrollViewer.ScrollToHorizontalOffset(e.HorizontalOffset);
     }
     
     private void OnPreviewMouseWheel(object sender, MouseWheelEventArgs e)
     {
-        // Ctrl + Wheel = Zoom
         if (Keyboard.Modifiers == ModifierKeys.Control)
         {
             var delta = e.Delta > 0 ? 10 : -10;
             var newZoom = Math.Clamp(ZoomLevel + delta, 50, 200);
             ZoomLevel = newZoom;
-            e.Handled = true; // Предотвращаем скролл
+            e.Handled = true;
         }
-        // Без Ctrl - позволяем ScrollViewer обрабатывать скролл
     }
     
     /// <summary>
-    /// Обработчик нажатия левой кнопки мыши (Preview для перехвата до ScrollViewer).
+    /// Обработчик нажатия левой кнопки мыши.
     /// </summary>
     private void OnPreviewMouseLeftButtonDown(object sender, MouseButtonEventArgs e)
     {
+        Focus();
         var position = e.GetPosition(TaskLayer);
-        var task = HitTestTask(position);
+        var hitResult = HitTestTaskWithIndex(position);
 
-        if (task != null)
+        if (hitResult.Task != null)
         {
-            SelectedTask = task;
+            SelectedTask = hitResult.Task;
 
-            // Обработка двойного клика
             if (e.ClickCount == 2)
             {
-                TaskDoubleClicked?.Invoke(this, task);
+                TaskDoubleClicked?.Invoke(this, hitResult.Task);
                 e.Handled = true;
                 return;
             }
 
-            // Проверяем, можно ли перетаскивать эту задачу
-            if (!CanDragTask(task))
+            if (!CanDragTask(hitResult.Task))
             {
-                e.Handled = true; // Всё равно помечаем handled для выделения
+                e.Handled = true;
                 return;
             }
 
-            // Определяем зону и тип операции
-            var zone = GetHitZone(task, position);
-            var operation = DetermineOperation(task, zone, Keyboard.Modifiers);
+            // Определяем тип операции
+            var operation = DetermineOperation(hitResult.Task, position, hitResult.RowIndex);
 
             if (operation != DragOperation.None)
             {
-                StartDrag(task, position, operation);
-                e.Handled = true; // Предотвращаем scroll и другие действия
+                StartDrag(hitResult.Task, position, hitResult.RowIndex, operation);
+                e.Handled = true;
             }
             else
             {
-                e.Handled = true; // Задача выбрана, но drag не начат
+                e.Handled = true;
             }
         }
         else
         {
             SelectedTask = null;
-            // Не помечаем Handled — пусть ScrollViewer работает при клике на пустое место
         }
     }
     
     /// <summary>
-    /// Обработчик отпускания левой кнопки мыши (Preview для перехвата до ScrollViewer).
+    /// Обработчик отпускания левой кнопки мыши.
     /// </summary>
     private void OnPreviewMouseLeftButtonUp(object sender, MouseButtonEventArgs e)
     {
-        if (!_dragState.IsActive) return;
+        if (_dragState == null || !_dragState.IsActive) return;
         
         var position = e.GetPosition(TaskLayer);
         CompleteDrag(position);
@@ -408,40 +426,104 @@ public partial class GanttChartControl : UserControl
     {
         var position = e.GetPosition(TaskLayer);
 
-        if (_dragState.IsActive)
+        if (_dragState != null && _dragState.IsActive)
         {
-            // Проверяем состояние соответствующей кнопки
-            if (_dragState.Operation == DragOperation.ProgressAdjusting)
+            switch (_dragState.Operation)
             {
-                // Для прогресса проверяем среднюю кнопку
-                if (e.MiddleButton != MouseButtonState.Pressed)
-                {
-                    CancelDrag();
-                    return;
-                }
-                UpdateProgressPreview(position);
-            }
-            else
-            {
-                // Для остальных операций проверяем левую кнопку
-                if (e.LeftButton != MouseButtonState.Pressed)
-                {
-                    CancelDrag();
-                    return;
-                }
-                UpdateDragPreview(position);
+                case DragOperation.ProgressAdjusting:
+                    if (e.MiddleButton != MouseButtonState.Pressed)
+                    {
+                        CancelDrag();
+                        return;
+                    }
+                    UpdateProgressPreview(position);
+                    break;
+                
+                case DragOperation.DeadlineMoving:
+                    if (e.LeftButton != MouseButtonState.Pressed)
+                    {
+                        CancelDrag();
+                        return;
+                    }
+                    UpdateDeadlinePreview(position);
+                    break;
+
+                default:
+                    if (e.LeftButton != MouseButtonState.Pressed)
+                    {
+                        CancelDrag();
+                        return;
+                    }
+                    UpdateDragPreview(position);
+                    break;
             }
         }
         else
         {
-            // Обновляем курсор при наведении
             UpdateCursor(position);
         }
     }
     
+    /// <summary>
+    /// Обрабатывает нажатия клавиш.
+    /// </summary>
+    private void OnKeyDown(object sender, KeyEventArgs e)
+    {
+        if (SelectedTask == null) return;
+
+        switch (e.Key)
+        {
+            case Key.D:
+                ToggleDeadline(SelectedTask);
+                e.Handled = true;
+                break;
+
+            case Key.Delete:
+                if (IsDeadlineSelected(SelectedTask))
+                {
+                    RemoveDeadline(SelectedTask);
+                    e.Handled = true;
+                }
+                break;
+
+            case Key.Escape:
+                if (_dragState != null && _dragState.IsActive)
+                {
+                    CancelDrag();
+                    e.Handled = true;
+                }
+                break;
+        }
+    }
+    
+    /// <summary>
+    /// Обновляет позицию дедлайна при перетаскивании.
+    /// </summary>
+    private void UpdateDeadlinePreview(Point currentPosition)
+    {
+        if (_dragState == null || _dragState.Task == null) return;
+
+        var task = _dragState.Task;
+        var columnWidth = ColumnWidth;
+
+        var newDeadlineDays = (int)Math.Round(currentPosition.X / columnWidth);
+        
+        if (newDeadlineDays < task.Start.Days)
+        {
+            newDeadlineDays = (int)task.Start.Days;
+        }
+
+        var newDeadline = TimeSpan.FromDays(newDeadlineDays);
+
+        ProjectManager?.SetDeadline(task, newDeadline);
+
+        InvalidateChart();
+    }
+
+    
     private void OnPreviewKeyDown(object sender, KeyEventArgs e)
     {
-        if (e.Key != Key.Escape || !_dragState.IsActive) return;
+        if (e.Key != Key.Escape || _dragState == null || !_dragState.IsActive) return;
         CancelDrag();
         e.Handled = true;
     }
@@ -451,7 +533,6 @@ public partial class GanttChartControl : UserControl
     /// </summary>
     private void OnPreviewMouseDown(object sender, MouseButtonEventArgs e)
     {
-        // Обрабатываем только среднюю кнопку
         if (e.ChangedButton != MouseButton.Middle)
             return;
 
@@ -460,17 +541,14 @@ public partial class GanttChartControl : UserControl
 
         if (task != null)
         {
-            // Проверяем, можно ли изменять прогресс этой задачи
             if (!CanAdjustProgress(task))
             {
                 e.Handled = true;
                 return;
             }
 
-            // Выделяем задачу
             SelectedTask = task;
 
-            // Начинаем операцию изменения прогресса
             StartProgressAdjust(task, position);
             e.Handled = true;
         }
@@ -481,11 +559,10 @@ public partial class GanttChartControl : UserControl
     /// </summary>
     private void OnPreviewMouseUp(object sender, MouseButtonEventArgs e)
     {
-        // Обрабатываем только среднюю кнопку
         if (e.ChangedButton != MouseButton.Middle)
             return;
 
-        if (!_dragState.IsActive || _dragState.Operation != DragOperation.ProgressAdjusting)
+        if (_dragState == null || !_dragState.IsActive || _dragState.Operation != DragOperation.ProgressAdjusting)
             return;
 
         var position = e.GetPosition(TaskLayer);
@@ -519,7 +596,6 @@ public partial class GanttChartControl : UserControl
     
     /// <summary>
     /// Принудительно перерисовывает диаграмму.
-    /// Вызывается извне при изменении данных.
     /// </summary>
     public void Refresh()
     {
@@ -561,17 +637,12 @@ public partial class GanttChartControl : UserControl
     
     /// <summary>
     /// Полностью сбрасывает и перерисовывает диаграмму.
-    /// Используется после структурных изменений (удаление/добавление задач).
     /// </summary>
     public void ForceFullRedraw()
     {
-        // Очищаем все слои
         ClearAllLayers();
-    
-        // Сбрасываем флаг рендеринга
         _isRendering = false;
     
-        // Принудительно вызываем рендеринг
         if (IsLoaded && ProjectManager != null)
         {
             Render();
@@ -582,10 +653,6 @@ public partial class GanttChartControl : UserControl
 
     #region Private Methods - Rendering
 
-    /// <summary>
-    /// Возвращает реальный индекс задачи в списке Tasks.
-    /// Обходит проблему с кэшированными индексами в ProjectManager.IndexOf().
-    /// </summary>
     private int GetRealTaskIndex(Task task)
     {
         if (ProjectManager == null) return -1;
@@ -602,10 +669,8 @@ public partial class GanttChartControl : UserControl
             return;
         }
 
-        // Вычисляем размеры
         var (totalWidth, totalHeight) = CalculateCanvasSize();
 
-        // Устанавливаем размеры Canvas
         SetCanvasSize(ChartCanvas, totalWidth, totalHeight);
         SetCanvasSize(GridLayer, totalWidth, totalHeight);
         SetCanvasSize(TodayLayer, totalWidth, totalHeight);
@@ -616,7 +681,6 @@ public partial class GanttChartControl : UserControl
         HeaderCanvas.Width = totalWidth;
         HeaderCanvas.Height = HeaderHeight;
 
-        // Рендерим слои
         RenderGrid();
         RenderHeader();
         RenderTasks();
@@ -630,9 +694,8 @@ public partial class GanttChartControl : UserControl
         if (ProjectManager == null || ProjectManager.Tasks.Count == 0)
             return (ActualWidth, ActualHeight);
 
-        // Находим максимальную дату
         var maxEnd = ProjectManager.Tasks.Max(t => t.End);
-        var totalDays = Math.Max(maxEnd.Days + 30, 60); // Минимум 60 дней для отображения
+        var totalDays = Math.Max(maxEnd.Days + 30, 60);
 
         var width = totalDays * ColumnWidth;
         var height = Math.Max(ProjectManager.Tasks.Count * RowHeight + 20, ActualHeight);
@@ -708,7 +771,7 @@ public partial class GanttChartControl : UserControl
         if (!ShowRelations || ProjectManager == null)
             return;
 
-        // TODO: Реализовать в RelationRenderer (Фаза 3.9)
+        // TODO: Реализовать в RelationRenderer
     }
 
     private void RenderOverlay()
@@ -718,13 +781,11 @@ public partial class GanttChartControl : UserControl
         if (SelectedTask == null || ProjectManager == null)
             return;
 
-        // Получаем индекс среди ВИДИМЫХ задач
         var visibleTasks = GetVisibleTasks();
         var index = visibleTasks.IndexOf(SelectedTask);
         if (index < 0)
             return;
 
-        // Рисуем рамку выделения
         var x = SelectedTask.Start.Days * ColumnWidth;
         var y = index * RowHeight + BarSpacing / 2;
         var width = Math.Max(SelectedTask.Duration.Days * ColumnWidth, ColumnWidth);
@@ -750,44 +811,64 @@ public partial class GanttChartControl : UserControl
 
     #region Private Methods - Hit Testing
 
+    /// <summary>
+    /// Hit-test задачи (возвращает только Task).
+    /// </summary>
     private Task? HitTestTask(Point position)
     {
-        if (ProjectManager == null)
-            return null;
+        return HitTestTaskWithIndex(position).Task;
+    }
 
-        // Получаем список ВИДИМЫХ задач (не скрытых в свёрнутых группах)
+    /// <summary>
+    /// Hit-test задачи с индексом строки.
+    /// </summary>
+    private (Task? Task, int RowIndex) HitTestTaskWithIndex(Point position)
+    {
+        if (ProjectManager == null)
+            return (null, -1);
+
         var visibleTasks = GetVisibleTasks();
     
         var rowIndex = (int)(position.Y / RowHeight);
 
         if (rowIndex < 0 || rowIndex >= visibleTasks.Count)
-            return null;
+            return (null, -1);
 
         var task = visibleTasks[rowIndex];
 
-        // Проверяем, попали ли мы в бар задачи по X
         var taskX = task.Start.Days * ColumnWidth;
         var taskWidth = Math.Max(task.Duration.Days * ColumnWidth, ColumnWidth);
 
+        // Проверяем попадание в бар задачи
         if (position.X >= taskX && position.X <= taskX + taskWidth)
         {
-            return task;
+            return (task, rowIndex);
         }
 
-        // Также проверяем клик по имени задачи (справа от бара)
+        // Проверяем попадание в область имени задачи
         var nameAreaX = taskX + taskWidth;
-        var nameAreaWidth = 200; // примерная ширина области имени
+        var nameAreaWidth = 200;
 
         if (position.X >= nameAreaX && position.X <= nameAreaX + nameAreaWidth)
         {
-            return task;
+            return (task, rowIndex);
         }
 
-        return null;
+        // Проверяем попадание в дедлайн
+        if (task.Deadline.HasValue)
+        {
+            var deadlineX = task.Deadline.Value.Days * ColumnWidth;
+            if (Math.Abs(position.X - deadlineX) <= DeadlineGrabZone)
+            {
+                return (task, rowIndex);
+            }
+        }
+
+        return (null, -1);
     }
 
     /// <summary>
-    /// Возвращает список видимых задач (исключая скрытые в свёрнутых группах).
+    /// Возвращает список видимых задач.
     /// </summary>
     private List<Task> GetVisibleTasks()
     {
@@ -808,7 +889,7 @@ public partial class GanttChartControl : UserControl
     }
 
     /// <summary>
-    /// Проверяет, скрыта ли задача (находится в свёрнутой группе).
+    /// Проверяет, скрыта ли задача.
     /// </summary>
     private bool IsTaskHidden(Task task)
     {
@@ -829,16 +910,75 @@ public partial class GanttChartControl : UserControl
     #region Private Methods - Drag & Drop
     
     /// <summary>
+    /// Добавляет или убирает дедлайн для задачи.
+    /// </summary>
+    private void ToggleDeadline(Task task)
+    {
+        if (task == null || ProjectManager == null) return;
+
+        if (ProjectManager.IsGroup(task)) return;
+
+        if (task.Deadline.HasValue)
+        {
+            ProjectManager.SetDeadline(task, null);
+            StatusMessage = $"Дедлайн удалён: '{task.Name}'";
+        }
+        else
+        {
+            var newDeadline = task.End + TimeSpan.FromDays(DefaultDeadlineOffsetDays);
+            ProjectManager.SetDeadline(task, newDeadline);
+            StatusMessage = $"Дедлайн добавлен: '{task.Name}' ({newDeadline.Days} дн.)";
+        }
+
+        InvalidateChart();
+        TaskModified?.Invoke(this, new TaskDragEventArgs 
+        { 
+            Task = task, 
+            Operation = DragOperation.None 
+        });
+    }
+
+    /// <summary>
+    /// Удаляет дедлайн у задачи.
+    /// </summary>
+    private void RemoveDeadline(Task task)
+    {
+        if (task == null || ProjectManager == null) return;
+
+        if (task.Deadline.HasValue)
+        {
+            ProjectManager.SetDeadline(task, null);
+            StatusMessage = $"Дедлайн удалён: '{task.Name}'";
+            InvalidateChart();
+            TaskModified?.Invoke(this, new TaskDragEventArgs 
+            { 
+                Task = task, 
+                Operation = DragOperation.None 
+            });
+        }
+    }
+
+    /// <summary>
+    /// Проверяет, находится ли курсор над дедлайном задачи.
+    /// </summary>
+    private bool IsDeadlineSelected(Task task)
+    {
+        if (task == null || !task.Deadline.HasValue) return false;
+
+        var position = Mouse.GetPosition(TaskLayer);
+        var deadlineX = task.Deadline.Value.Days * ColumnWidth;
+
+        return Math.Abs(position.X - deadlineX) <= DeadlineGrabZone;
+    }
+    
+    /// <summary>
     /// Проверяет, можно ли изменять прогресс задачи.
     /// </summary>
     private bool CanAdjustProgress(Task task)
     {
         if (ProjectManager == null) return false;
 
-        // Нельзя изменять прогресс групп (он вычисляется автоматически)
         if (ProjectManager.IsGroup(task)) return false;
-
-        // Нельзя изменять прогресс split-задач (только частей)
         if (ProjectManager.IsSplit(task)) return false;
 
         return true;
@@ -849,21 +989,22 @@ public partial class GanttChartControl : UserControl
     /// </summary>
     private void StartProgressAdjust(Task task, Point startPoint)
     {
-        _dragState.Task = task;
-        _dragState.Operation = DragOperation.ProgressAdjusting;
-        _dragState.StartPoint = startPoint;
-        _dragState.OriginalStart = task.Start;
-        _dragState.OriginalDuration = task.Duration;
-        _dragState.OriginalComplete = task.Complete;
-        _dragState.OriginalIndex = GetRealTaskIndex(task);
+        _dragState = new DragState
+        {
+            Task = task,
+            Operation = DragOperation.ProgressAdjusting,
+            StartPoint = startPoint,
+            OriginalStart = task.Start,
+            OriginalDuration = task.Duration,
+            OriginalEnd = task.End,
+            OriginalComplete = task.Complete,
+            OriginalDeadline = task.Deadline,
+            OriginalIndex = GetRealTaskIndex(task)
+        };
 
-        // Захватываем мышь
         CaptureMouse();
-
-        // Устанавливаем курсор (горизонтальное изменение)
         Cursor = Cursors.SizeWE;
 
-        // Рисуем начальный preview
         RenderProgressPreview();
     }
     
@@ -872,33 +1013,29 @@ public partial class GanttChartControl : UserControl
     /// </summary>
     private void UpdateProgressPreview(Point currentPoint)
     {
-        if (!_dragState.IsActive || _dragState.Task == null || ProjectManager == null)
+        if (_dragState == null || _dragState.Task == null || ProjectManager == null)
             return;
 
         var deltaX = currentPoint.X - _dragState.StartPoint.X;
         
-        // Вычисляем изменение прогресса
         var deltaPercent = (float)(deltaX / PixelsPerProgressPercent / 100.0);
         var newComplete = _dragState.OriginalComplete + deltaPercent;
 
-        // Ограничиваем 0-100%
         newComplete = Math.Clamp(newComplete, 0f, 1f);
 
-        // Используем ProjectManager для установки (он обновит родительские группы)
         ProjectManager.SetComplete(_dragState.Task, newComplete);
 
-        // Перерисовываем preview
         RenderProgressPreview();
     }
     
-        /// <summary>
-    /// Рисует preview изменения прогресса с tooltip.
+    /// <summary>
+    /// Рисует preview изменения прогресса.
     /// </summary>
     private void RenderProgressPreview()
     {
         OverlayLayer.Children.Clear();
 
-        if (!_dragState.IsActive || _dragState.Task == null || ProjectManager == null)
+        if (_dragState == null || _dragState.Task == null || ProjectManager == null)
             return;
 
         var task = _dragState.Task;
@@ -906,17 +1043,15 @@ public partial class GanttChartControl : UserControl
         var index = visibleTasks.IndexOf(task);
         if (index < 0) return;
 
-        // Координаты бара
         var x = task.Start.Days * ColumnWidth;
         var y = index * RowHeight + BarSpacing / 2;
         var width = Math.Max(task.Duration.Days * ColumnWidth, ColumnWidth);
 
-        // Рисуем рамку выделения
         var selectionRect = new Rectangle
         {
             Width = width + 4,
             Height = BarHeight + 4,
-            Stroke = Brushes.Orange, // Оранжевый для режима прогресса
+            Stroke = Brushes.Orange,
             StrokeThickness = 2,
             Fill = Brushes.Transparent,
             RadiusX = 4,
@@ -927,13 +1062,12 @@ public partial class GanttChartControl : UserControl
         Canvas.SetTop(selectionRect, y - 2);
         OverlayLayer.Children.Add(selectionRect);
 
-        // Рисуем индикатор прогресса внутри бара
         var progressWidth = width * task.Complete;
         var progressRect = new Rectangle
         {
             Width = Math.Max(progressWidth, 0),
             Height = BarHeight,
-            Fill = new SolidColorBrush(Color.FromArgb(180, 255, 165, 0)), // Полупрозрачный оранжевый
+            Fill = new SolidColorBrush(Color.FromArgb(180, 255, 165, 0)),
             RadiusX = 3,
             RadiusY = 3
         };
@@ -942,7 +1076,6 @@ public partial class GanttChartControl : UserControl
         Canvas.SetTop(progressRect, y);
         OverlayLayer.Children.Add(progressRect);
 
-        // Tooltip с процентом (над баром)
         var percent = (int)(task.Complete * 100);
         var tooltipBorder = new Border
         {
@@ -962,11 +1095,9 @@ public partial class GanttChartControl : UserControl
 
         tooltipBorder.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
         
-        // Позиционируем tooltip над баром по центру
         var tooltipX = x + (width - tooltipBorder.DesiredSize.Width) / 2;
         var tooltipY = y - tooltipBorder.DesiredSize.Height - 4;
 
-        // Не даём выйти за верхнюю границу
         if (tooltipY < 0)
             tooltipY = y + BarHeight + 4;
 
@@ -974,11 +1105,9 @@ public partial class GanttChartControl : UserControl
         Canvas.SetTop(tooltipBorder, Math.Max(0, tooltipY));
         OverlayLayer.Children.Add(tooltipBorder);
 
-        // Направляющая линия (показывает направление изменения)
         var arrowY = y + BarHeight / 2;
         var arrowStartX = x + progressWidth;
         
-        // Стрелка вправо (увеличение) или влево (уменьшение)
         var arrowLine = new Line
         {
             X1 = arrowStartX,
@@ -996,7 +1125,7 @@ public partial class GanttChartControl : UserControl
     /// </summary>
     private void CompleteProgressAdjust(Point endPoint)
     {
-        if (!_dragState.IsActive || _dragState.Task == null || ProjectManager == null)
+        if (_dragState == null || _dragState.Task == null || ProjectManager == null)
         {
             CancelDrag();
             return;
@@ -1004,7 +1133,6 @@ public partial class GanttChartControl : UserControl
 
         var task = _dragState.Task;
 
-        // Создаём событие для Undo/Redo
         var args = new TaskDragEventArgs(
             task,
             DragOperation.ProgressAdjusting,
@@ -1017,10 +1145,8 @@ public partial class GanttChartControl : UserControl
             _dragState.OriginalComplete,
             task.Complete);
 
-        // Очищаем состояние
         FinalizeDrag();
 
-        // Вызываем событие
         TaskDragged?.Invoke(this, args);
     }
 
@@ -1032,54 +1158,85 @@ public partial class GanttChartControl : UserControl
     {
         if (ProjectManager == null) return false;
 
-        // Группы можно перетаскивать (только Moving, resize заблокирован в DetermineOperation)
-        // Split-части пока блокируем
         if (ProjectManager.IsPart(task)) return false;
 
         return true;
     }
 
     /// <summary>
-    /// Определяет зону попадания на баре задачи.
+    /// Определяет тип операции по позиции клика.
     /// </summary>
-    private HitZone GetHitZone(Task task, Point position)
+    private DragOperation DetermineOperation(Task task, Point clickPosition, int rowIndex)
     {
-        var taskX = task.Start.Days * ColumnWidth;
-        var taskWidth = Math.Max(task.Duration.Days * ColumnWidth, ColumnWidth);
+        var columnWidth = ColumnWidth;
+        var barHeight = BarHeight;
+        var barSpacing = BarSpacing;
+        var rowHeight = RowHeight;
 
-        var relativeX = position.X - taskX;
+        var taskX = task.Start.Days * columnWidth;
+        var taskY = rowIndex * rowHeight + barSpacing / 2;
+        var taskWidth = Math.Max(task.Duration.Days * columnWidth, columnWidth * 0.5);
+        var taskEndX = taskX + taskWidth;
 
-        if (relativeX < EdgeZoneWidth)
-            return HitZone.LeftEdge;
-
-        if (relativeX > taskWidth - EdgeZoneWidth)
-            return HitZone.RightEdge;
-
-        return HitZone.Center;
-    }
-
-    /// <summary>
-    /// Определяет тип операции по зоне, модификаторам и типу задачи.
-    /// </summary>
-    private DragOperation DetermineOperation(Task task, HitZone zone, ModifierKeys modifiers)
-    {
-        // Shift + любая зона = Reordering
-        if (modifiers.HasFlag(ModifierKeys.Shift))
-            return DragOperation.Reordering;
-
-        // Для групп запрещаем resize — только перемещение
-        if (ProjectManager != null && ProjectManager.IsGroup(task))
+        // Проверка дедлайна
+        if (task.Deadline.HasValue)
         {
-            return zone == HitZone.Center ? DragOperation.Moving : DragOperation.None;
+            var deadlineX = task.Deadline.Value.Days * columnWidth;
+            
+            if (Math.Abs(clickPosition.X - deadlineX) <= DeadlineGrabZone &&
+                clickPosition.Y >= taskY - 4 &&
+                clickPosition.Y <= taskY + barHeight + 4)
+            {
+                return DragOperation.DeadlineMoving;
+            }
         }
 
-        return zone switch
+        // Группы — только перемещение
+        var isGroup = ProjectManager?.IsGroup(task) ?? false;
+        if (isGroup)
         {
-            HitZone.LeftEdge => DragOperation.ResizingStart,
-            HitZone.RightEdge => DragOperation.ResizingEnd,
-            HitZone.Center => DragOperation.Moving,
-            _ => DragOperation.None
-        };
+            if (clickPosition.X >= taskX && clickPosition.X <= taskEndX &&
+                clickPosition.Y >= taskY && clickPosition.Y <= taskY + barHeight)
+            {
+                return DragOperation.Moving;
+            }
+            return DragOperation.None;
+        }
+
+        // Split-части — нельзя тянуть
+        var isSplitPart = task.IsPart;
+        if (isSplitPart)
+        {
+            return DragOperation.None;
+        }
+
+        // Обычные задачи
+        const double resizeZone = 8.0;
+
+        if (clickPosition.Y < taskY || clickPosition.Y > taskY + barHeight)
+        {
+            return DragOperation.None;
+        }
+
+        // Левый край
+        if (clickPosition.X >= taskX - resizeZone && clickPosition.X <= taskX + resizeZone)
+        {
+            return DragOperation.ResizingStart;
+        }
+
+        // Правый край
+        if (clickPosition.X >= taskEndX - resizeZone && clickPosition.X <= taskEndX + resizeZone)
+        {
+            return DragOperation.ResizingEnd;
+        }
+
+        // Центр
+        if (clickPosition.X > taskX + resizeZone && clickPosition.X < taskEndX - resizeZone)
+        {
+            return DragOperation.Moving;
+        }
+
+        return DragOperation.None;
     }
 
     /// <summary>
@@ -1087,28 +1244,78 @@ public partial class GanttChartControl : UserControl
     /// </summary>
     private void UpdateCursor(Point position)
     {
-        var task = HitTestTask(position);
+        if (_dragState != null && _dragState.IsActive)
+            return;
 
-        if (task != null && CanDragTask(task))
+        var hitResult = HitTestTaskWithIndex(position);
+
+        if (hitResult.Task == null)
         {
-            var zone = GetHitZone(task, position);
-            var isGroup = ProjectManager?.IsGroup(task) ?? false;
+            Cursor = Cursors.Arrow;
+            return;
+        }
 
-            // Для групп показываем SizeAll только в центре
-            if (isGroup)
+        var task = hitResult.Task;
+        var rowIndex = hitResult.RowIndex;
+
+        // Проверяем дедлайн
+        if (task.Deadline.HasValue)
+        {
+            var deadlineX = task.Deadline.Value.Days * ColumnWidth;
+            var taskY = rowIndex * RowHeight + BarSpacing / 2;
+            
+            if (Math.Abs(position.X - deadlineX) <= DeadlineGrabZone &&
+                position.Y >= taskY - 4 &&
+                position.Y <= taskY + BarHeight + 4)
             {
-                Cursor = zone == HitZone.Center ? Cursors.SizeAll : Cursors.Arrow;
+                Cursor = Cursors.SizeWE;
+                return;
+            }
+        }
+
+        var isGroup = ProjectManager?.IsGroup(task) ?? false;
+        var isSplitPart = task.IsPart;
+
+        if (isSplitPart)
+        {
+            Cursor = Cursors.No;
+            return;
+        }
+
+        var columnWidth = ColumnWidth;
+        var taskX = task.Start.Days * columnWidth;
+        var taskWidth = Math.Max(task.Duration.Days * columnWidth, columnWidth * 0.5);
+        var taskEndX = taskX + taskWidth;
+
+        const double resizeZone = 8.0;
+
+        if (isGroup)
+        {
+            if (position.X >= taskX && position.X <= taskEndX)
+            {
+                Cursor = Cursors.SizeAll;
             }
             else
             {
-                Cursor = zone switch
-                {
-                    HitZone.LeftEdge => Cursors.SizeWE,
-                    HitZone.RightEdge => Cursors.SizeWE,
-                    HitZone.Center => Cursors.SizeAll,
-                    _ => Cursors.Arrow
-                };
+                Cursor = Cursors.Arrow;
             }
+            return;
+        }
+
+        // Левый край
+        if (position.X >= taskX - resizeZone && position.X <= taskX + resizeZone)
+        {
+            Cursor = Cursors.SizeWE;
+        }
+        // Правый край
+        else if (position.X >= taskEndX - resizeZone && position.X <= taskEndX + resizeZone)
+        {
+            Cursor = Cursors.SizeWE;
+        }
+        // Центр
+        else if (position.X > taskX + resizeZone && position.X < taskEndX - resizeZone)
+        {
+            Cursor = Cursors.SizeAll;
         }
         else
         {
@@ -1116,45 +1323,50 @@ public partial class GanttChartControl : UserControl
         }
     }
 
+
     /// <summary>
     /// Начинает операцию перетаскивания.
     /// </summary>
-    private void StartDrag(Task task, Point startPoint, DragOperation operation)
+    private void StartDrag(Task task, Point position, int rowIndex, DragOperation operation)
     {
-        _dragState.Task = task;
-        _dragState.Operation = operation;
-        _dragState.StartPoint = startPoint;
-        _dragState.OriginalStart = task.Start;
-        _dragState.OriginalDuration = task.Duration;
-        _dragState.OriginalIndex = GetRealTaskIndex(task);
-
-        // Для групп сохраняем оригинальные позиции всех дочерних задач
-        if (ProjectManager != null && ProjectManager.IsGroup(task))
+        _dragState = new DragState
         {
-            _originalChildPositions = new Dictionary<Guid, (TimeSpan, TimeSpan)>();
+            Task = task,
+            Operation = operation,
+            StartPoint = position,
+            OriginalStart = task.Start,
+            OriginalDuration = task.Duration,
+            OriginalEnd = task.End,
+            OriginalComplete = task.Complete,
+            OriginalDeadline = task.Deadline,
+            OriginalIndex = rowIndex
+        };
+
+        Mouse.Capture(this);
+
+        switch (operation)
+        {
+            case DragOperation.Moving:
+                Cursor = Cursors.SizeAll;
+                break;
+            case DragOperation.ResizingStart:
+            case DragOperation.ResizingEnd:
+            case DragOperation.DeadlineMoving:
+                Cursor = Cursors.SizeWE;
+                break;
+            case DragOperation.ProgressAdjusting:
+                Cursor = Cursors.SizeWE;
+                break;
+        }
+
+        if (operation == DragOperation.Moving && ProjectManager != null && ProjectManager.IsGroup(task))
+        {
+            _originalChildPositions = new Dictionary<Guid, (TimeSpan Start, TimeSpan Duration)>();
             foreach (var member in ProjectManager.MembersOf(task))
             {
                 _originalChildPositions[member.Id] = (member.Start, member.Duration);
             }
         }
-        else
-        {
-            _originalChildPositions = null;
-        }
-
-        // Захватываем мышь на уровне контрола
-        CaptureMouse();
-
-        // Устанавливаем курсор
-        Cursor = operation switch
-        {
-            DragOperation.Reordering => Cursors.SizeNS,
-            DragOperation.ResizingStart or DragOperation.ResizingEnd => Cursors.SizeWE,
-            _ => Cursors.SizeAll
-        };
-
-        // Рисуем начальный preview
-        RenderDragPreview();
     }
 
     /// <summary>
@@ -1162,7 +1374,7 @@ public partial class GanttChartControl : UserControl
     /// </summary>
     private void UpdateDragPreview(Point currentPoint)
     {
-        if (!_dragState.IsActive || _dragState.Task == null || ProjectManager == null)
+        if (_dragState == null || _dragState.Task == null || ProjectManager == null)
             return;
 
         var deltaX = currentPoint.X - _dragState.StartPoint.X;
@@ -1190,183 +1402,120 @@ public partial class GanttChartControl : UserControl
         RenderDragPreview();
     }
 
-    /// <summary>
-    /// Обновляет preview для перемещения.
-    /// Для групп перемещает все дочерние задачи синхронно.
-    /// Для обычных задач автоматически расширяет границы родительской группы.
-    /// </summary>
     private void UpdateMovingPreview(double deltaX)
     {
-        if (_dragState.Task == null || ProjectManager == null) return;
+        if (_dragState == null || _dragState.Task == null || ProjectManager == null)
+            return;
 
-        // Конвертируем дельту в дни
         var deltaDays = (int)Math.Round(deltaX / ColumnWidth);
         var newStart = _dragState.OriginalStart + TimeSpan.FromDays(deltaDays);
 
-        // Не позволяем уйти в отрицательные дни
         if (newStart < TimeSpan.Zero)
             newStart = TimeSpan.Zero;
 
-        var task = _dragState.Task;
-
-        // Используем ProjectManager.SetStart для всех задач
-        // Это автоматически:
-        // - Для групп: перемещает все дочерние задачи
-        // - Для обычных задач: пересчитывает границы родительской группы
-        ProjectManager.SetStart(task, newStart);
+        ProjectManager.SetStart(_dragState.Task, newStart);
     }
 
-    /// <summary>
-    /// Обновляет preview для изменения начала (левый край).
-    /// Сохраняет End, изменяет Start и Duration.
-    /// Автоматически расширяет границы родительской группы.
-    /// </summary>
     private void UpdateResizingStartPreview(double deltaX)
     {
-        if (_dragState.Task == null || ProjectManager == null) return;
+        if (_dragState == null || _dragState.Task == null || ProjectManager == null)
+            return;
 
         var deltaDays = (int)Math.Round(deltaX / ColumnWidth);
         var newStart = _dragState.OriginalStart + TimeSpan.FromDays(deltaDays);
+        var originalEnd = _dragState.OriginalEnd;
 
-        // Вычисляем End, который должен остаться на месте
-        var originalEnd = _dragState.OriginalStart + _dragState.OriginalDuration;
-        
-        // Вычисляем новую длительность
-        var newDuration = originalEnd - newStart;
-
-        // Ограничения: Start не может быть отрицательным
         if (newStart < TimeSpan.Zero)
-        {
             newStart = TimeSpan.Zero;
-            newDuration = originalEnd; // Duration = End - 0
-        }
 
-        // Ограничения: минимальная длительность
-        if (newDuration < TimeSpan.FromDays(MinDurationDays))
-        {
-            newDuration = TimeSpan.FromDays(MinDurationDays);
-            newStart = originalEnd - newDuration;
-        }
+        if (newStart >= originalEnd - TimeSpan.FromDays(MinDurationDays))
+            newStart = originalEnd - TimeSpan.FromDays(MinDurationDays);
 
-        // Используем ProjectManager для изменений
-        // Шаг 1: SetStart сдвинет и End (сохраняя Duration)
         ProjectManager.SetStart(_dragState.Task, newStart);
-        
-        // Шаг 2: SetEnd восстановит оригинальный End и пересчитает Duration
-        // Это также вызовет _RecalculateAncestorsSchedule для обновления границ группы
         ProjectManager.SetEnd(_dragState.Task, originalEnd);
     }
 
-
-    /// <summary>
-    /// Обновляет preview для изменения длительности (правый край).
-    /// Сохраняет Start, изменяет End и Duration.
-    /// Автоматически расширяет границы родительской группы.
-    /// </summary>
     private void UpdateResizingEndPreview(double deltaX)
     {
-        if (_dragState.Task == null || ProjectManager == null) return;
+        if (_dragState == null || _dragState.Task == null || ProjectManager == null)
+            return;
 
         var deltaDays = (int)Math.Round(deltaX / ColumnWidth);
-        var newDuration = _dragState.OriginalDuration + TimeSpan.FromDays(deltaDays);
+        var newEnd = _dragState.OriginalEnd + TimeSpan.FromDays(deltaDays);
 
-        // Минимальная длительность
-        if (newDuration < TimeSpan.FromDays(MinDurationDays))
-            newDuration = TimeSpan.FromDays(MinDurationDays);
+        if (newEnd <= _dragState.Task.Start + TimeSpan.FromDays(MinDurationDays))
+            newEnd = _dragState.Task.Start + TimeSpan.FromDays(MinDurationDays);
 
-        // Вычисляем новый End
-        var newEnd = _dragState.Task.Start + newDuration;
-
-        // Используем ProjectManager.SetEnd — это автоматически:
-        // 1. Изменит End и Duration
-        // 2. Вызовет _RecalculateAncestorsSchedule для обновления границ группы
-        // 3. Вызовет _RecalculateSlack
         ProjectManager.SetEnd(_dragState.Task, newEnd);
     }
 
-    /// <summary>
-    /// Обновляет preview для переупорядочивания.
-    /// </summary>
     private void UpdateReorderingPreview(double deltaY)
     {
-        // Пока только визуальный preview, перемещение при завершении
-        // Линия-индикатор рисуется в RenderDragPreview
+        // Визуальная индикация через RenderReorderIndicator
     }
 
-    /// <summary>
-    /// Рисует preview перетаскивания.
-    /// Для групп также отображает preview всех дочерних задач.
-    /// </summary>
     private void RenderDragPreview()
     {
         OverlayLayer.Children.Clear();
 
-        if (!_dragState.IsActive || _dragState.Task == null || ProjectManager == null)
+        if (_dragState == null || _dragState.Task == null || ProjectManager == null)
             return;
 
         var task = _dragState.Task;
         var visibleTasks = GetVisibleTasks();
 
-        if (_dragState.Operation == DragOperation.Reordering)
-        {
-            // Рисуем линию-индикатор позиции
-            RenderReorderIndicator();
-        }
+        // Проверяем, является ли задача группой
+        var isGroup = ProjectManager.IsGroup(task);
 
-        // Если это группа — рисуем preview для всех членов
-        if (ProjectManager.IsGroup(task))
+        if (isGroup)
         {
             RenderGroupDragPreview(task, visibleTasks);
         }
         else
         {
-            // Обычная задача — рисуем только её
-            RenderTaskDragPreview(task, visibleTasks, isMainTask: true);
+            RenderTaskDragPreview(task, visibleTasks, true);
         }
-    }
-    
-        /// <summary>
-    /// Рисует preview для группы и всех её членов.
-    /// </summary>
-    private void RenderGroupDragPreview(Task groupTask, List<Task> visibleTasks)
-    {
-        // Сначала рисуем саму группу (основной выделенный элемент)
-        RenderTaskDragPreview(groupTask, visibleTasks, isMainTask: true);
 
-        // Затем рисуем все дочерние задачи
-        foreach (var member in ProjectManager!.MembersOf(groupTask))
+        if (_dragState.Operation == DragOperation.Reordering)
         {
-            // Пропускаем скрытые задачи (в свёрнутых подгруппах)
-            if (!visibleTasks.Contains(member))
-                continue;
-
-            RenderTaskDragPreview(member, visibleTasks, isMainTask: false);
+            RenderReorderIndicator();
         }
     }
 
     /// <summary>
-    /// Рисует preview для одной задачи.
+    /// Рисует preview группы со всеми дочерними задачами.
     /// </summary>
-    /// <param name="task">Задача для отрисовки.</param>
-    /// <param name="visibleTasks">Список видимых задач.</param>
-    /// <param name="isMainTask">True если это основная перетаскиваемая задача.</param>
+    private void RenderGroupDragPreview(Task groupTask, List<Task> visibleTasks)
+    {
+        // Сначала рисуем саму группу
+        RenderTaskDragPreview(groupTask, visibleTasks, true);
+
+        // Затем все дочерние задачи
+        if (ProjectManager == null) return;
+        
+        foreach (var member in ProjectManager.MembersOf(groupTask))
+        {
+            RenderTaskDragPreview(member, visibleTasks, false);
+        }
+    }
+
+    /// <summary>
+    /// Рисует preview одной задачи.
+    /// </summary>
     private void RenderTaskDragPreview(Task task, List<Task> visibleTasks, bool isMainTask)
     {
         var index = visibleTasks.IndexOf(task);
         if (index < 0) return;
 
-        // Координаты бара
         var x = task.Start.Days * ColumnWidth;
         var y = index * RowHeight + BarSpacing / 2;
         var width = Math.Max(task.Duration.Days * ColumnWidth, ColumnWidth);
 
-        // Определяем стиль в зависимости от типа задачи
         byte alpha = isMainTask ? (byte)160 : (byte)100;
         var fillColor = isMainTask 
-            ? Color.FromArgb(alpha, 70, 130, 180)   // Более яркий для основной
-            : Color.FromArgb(alpha, 100, 149, 237); // Бледнее для дочерних
+            ? Color.FromArgb(alpha, 70, 130, 180)
+            : Color.FromArgb(alpha, 100, 149, 237);
 
-        // Полупрозрачный preview бара
         var previewRect = new Rectangle
         {
             Width = width,
@@ -1385,7 +1534,6 @@ public partial class GanttChartControl : UserControl
         Canvas.SetTop(previewRect, y);
         OverlayLayer.Children.Add(previewRect);
 
-        // Рамка выделения только для основной задачи
         if (isMainTask)
         {
             var selectionRect = new Rectangle
@@ -1410,7 +1558,6 @@ public partial class GanttChartControl : UserControl
     /// </summary>
     private void RenderReorderIndicator()
     {
-        // Вычисляем целевую позицию на основе текущей позиции мыши
         var mousePos = Mouse.GetPosition(TaskLayer);
         var visibleTasks = GetVisibleTasks();
         var targetIndex = (int)(mousePos.Y / RowHeight);
@@ -1430,7 +1577,6 @@ public partial class GanttChartControl : UserControl
 
         OverlayLayer.Children.Add(line);
 
-        // Треугольный указатель слева
         var arrow = new Polygon
         {
             Points = new PointCollection
@@ -1450,7 +1596,7 @@ public partial class GanttChartControl : UserControl
     /// </summary>
     private void CompleteDrag(Point endPoint)
     {
-        if (!_dragState.IsActive || _dragState.Task == null || ProjectManager == null)
+        if (_dragState == null || _dragState.Task == null || ProjectManager == null)
         {
             CancelDrag();
             return;
@@ -1459,20 +1605,32 @@ public partial class GanttChartControl : UserControl
         var task = _dragState.Task;
         var operation = _dragState.Operation;
 
-        // Для Reordering — выполняем перемещение
-        if (operation == DragOperation.Reordering)
+        switch (operation)
         {
-            var visibleTasks = GetVisibleTasks();
-            var targetIndex = (int)(endPoint.Y / RowHeight);
-            targetIndex = Math.Max(0, Math.Min(targetIndex, visibleTasks.Count - 1));
-
-            if (targetIndex != _dragState.OriginalIndex)
+            case DragOperation.Reordering:
             {
-                MoveTaskToIndex(task, _dragState.OriginalIndex, targetIndex);
+                var visibleTasks = GetVisibleTasks();
+                if (visibleTasks.Count > 0)
+                {
+                    var targetIndex = (int)(endPoint.Y / RowHeight);
+                    targetIndex = Math.Max(0, Math.Min(targetIndex, visibleTasks.Count - 1));
+
+                    if (targetIndex != _dragState.OriginalIndex)
+                    {
+                        MoveTaskToIndex(task, _dragState.OriginalIndex, targetIndex);
+                    }
+                }
+                break;
             }
+            
+            case DragOperation.DeadlineMoving:
+                StatusMessage = $"Дедлайн '{_dragState.Task.Name}': {_dragState.Task.Deadline?.Days} дн.";
+                break;
+
+            default:
+                break;
         }
 
-        // Создаём событие для Undo/Redo
         var args = new TaskDragEventArgs(
             task,
             operation,
@@ -1485,10 +1643,8 @@ public partial class GanttChartControl : UserControl
             _dragState.OriginalComplete,
             task.Complete);
 
-        // Очищаем состояние
         FinalizeDrag();
 
-        // Вызываем событие
         TaskDragged?.Invoke(this, args);
     }
 
@@ -1499,58 +1655,59 @@ public partial class GanttChartControl : UserControl
     {
         if (ProjectManager == null || fromIndex == toIndex) return;
 
-        // Используем ProjectManager.Move для перемещения
         var offset = toIndex - fromIndex;
         ProjectManager.Move(task, offset);
     }
 
     /// <summary>
-    /// Отменяет операцию перетаскивания и восстанавливает оригинальные значения.
+    /// Отменяет операцию перетаскивания.
     /// </summary>
     private void CancelDrag()
     {
-        if (_dragState.IsActive && _dragState.Task != null && ProjectManager != null)
-        {
-            var task = _dragState.Task;
+        if (_dragState == null) return;
 
+        var task = _dragState.Task;
+
+        if (task != null)
+        {
             switch (_dragState.Operation)
             {
-                case DragOperation.ProgressAdjusting:
-                    // Восстанавливаем прогресс
-                    ProjectManager.SetComplete(task, _dragState.OriginalComplete);
-                    break;
-
-                case DragOperation.Moving or DragOperation.ResizingStart or DragOperation.ResizingEnd:
-                    if (ProjectManager.IsGroup(task) && _originalChildPositions != null)
+                case DragOperation.Moving:
+                case DragOperation.ResizingStart:
+                case DragOperation.ResizingEnd:
+                    ProjectManager?.SetStart(task, _dragState.OriginalStart);
+                    ProjectManager?.SetEnd(task, _dragState.OriginalEnd);
+                    
+                    if (_originalChildPositions != null && ProjectManager != null)
                     {
-                        // Для групп: восстанавливаем позиции всех дочерних задач
                         foreach (var member in ProjectManager.MembersOf(task))
                         {
                             if (_originalChildPositions.TryGetValue(member.Id, out var original))
                             {
-                                member.Start = original.Start;
-                                member.Duration = original.Duration;
-                                member.End = original.Start + original.Duration;
+                                ProjectManager.SetStart(member, original.Start);
+                                ProjectManager.SetDuration(member, original.Duration);
                             }
                         }
-                        
-                        task.Start = _dragState.OriginalStart;
-                        task.Duration = _dragState.OriginalDuration;
-                        task.End = _dragState.OriginalStart + _dragState.OriginalDuration;
                     }
-                    else
-                    {
-                        // Для обычных задач
-                        var originalEnd = _dragState.OriginalStart + _dragState.OriginalDuration;
-                        ProjectManager.SetStart(task, _dragState.OriginalStart);
-                        ProjectManager.SetEnd(task, originalEnd);
-                    }
+                    break;
+
+                case DragOperation.ProgressAdjusting:
+                    ProjectManager?.SetComplete(task, _dragState.OriginalComplete);
+                    break;
+
+                case DragOperation.DeadlineMoving:
+                    ProjectManager?.SetDeadline(task, _dragState.OriginalDeadline);
                     break;
             }
         }
 
+        _dragState = null;
         _originalChildPositions = null;
-        FinalizeDrag();
+
+        Mouse.Capture(null);
+        Cursor = Cursors.Arrow;
+
+        InvalidateChart();
     }
 
     /// <summary>
@@ -1558,7 +1715,7 @@ public partial class GanttChartControl : UserControl
     /// </summary>
     private void FinalizeDrag()
     {
-        _dragState.Reset();
+        _dragState = null;
         _originalChildPositions = null;
         ReleaseMouseCapture();
         Cursor = Cursors.Arrow;
@@ -1568,4 +1725,92 @@ public partial class GanttChartControl : UserControl
     }
 
     #endregion
+}
+
+/// <summary>
+/// Состояние операции перетаскивания.
+/// </summary>
+public class DragState
+{
+    public Task? Task { get; set; }
+    public DragOperation Operation { get; set; }
+    public Point StartPoint { get; set; }
+    public TimeSpan OriginalStart { get; set; }
+    public TimeSpan OriginalDuration { get; set; }
+    public TimeSpan OriginalEnd { get; set; }
+    public float OriginalComplete { get; set; }
+    public TimeSpan? OriginalDeadline { get; set; }
+    public int OriginalIndex { get; set; }
+    
+    public bool IsActive => Task != null;
+    
+    public void Reset()
+    {
+        Task = null;
+        Operation = DragOperation.None;
+        StartPoint = default;
+        OriginalStart = default;
+        OriginalDuration = default;
+        OriginalEnd = default;
+        OriginalComplete = 0;
+        OriginalDeadline = null;
+        OriginalIndex = -1;
+    }
+}
+
+/// <summary>
+/// Тип операции перетаскивания.
+/// </summary>
+public enum DragOperation
+{
+    None,
+    Moving,
+    ResizingStart,
+    ResizingEnd,
+    Reordering,
+    ProgressAdjusting,
+    DeadlineMoving
+}
+
+/// <summary>
+/// Аргументы события перетаскивания задачи.
+/// </summary>
+public class TaskDragEventArgs : EventArgs
+{
+    public Task Task { get; set; } = null!;
+    public DragOperation Operation { get; set; }
+    public TimeSpan OldStart { get; set; }
+    public TimeSpan NewStart { get; set; }
+    public TimeSpan OldDuration { get; set; }
+    public TimeSpan NewDuration { get; set; }
+    public int OldIndex { get; set; }
+    public int NewIndex { get; set; }
+    public float OldComplete { get; set; }
+    public float NewComplete { get; set; }
+
+    public TaskDragEventArgs() { }
+
+    public TaskDragEventArgs(
+        Task task,
+        DragOperation operation,
+        TimeSpan oldStart,
+        TimeSpan newStart,
+        TimeSpan oldDuration,
+        TimeSpan newDuration,
+        int oldIndex,
+        int newIndex,
+        float oldComplete,
+        float newComplete)
+    {
+        Task = task;
+        Operation = operation;
+        OldStart = oldStart;
+        NewStart = newStart;
+        OldDuration = oldDuration;
+        NewDuration = newDuration;
+        OldIndex = oldIndex;
+        NewIndex = newIndex;
+        OldComplete = oldComplete;
+        NewComplete = newComplete;
+    }
 }
