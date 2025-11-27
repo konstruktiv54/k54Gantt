@@ -1,4 +1,3 @@
-// GanttChart.WPF/Controls/GanttChartControl.xaml.cs
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
@@ -28,7 +27,8 @@ public partial class GanttChartControl : UserControl
     private readonly DragState _dragState = new();
     private const double EdgeZoneWidth = 8.0;  // Ширина зоны для resize
     private const double MinDurationDays = 1.0;
-
+    private Dictionary<Guid, (TimeSpan Start, TimeSpan Duration)>? _originalChildPositions;
+    
     #endregion
 
     #region Dependency Properties
@@ -260,11 +260,12 @@ public partial class GanttChartControl : UserControl
         Loaded += OnLoaded;
         SizeChanged += OnSizeChanged;
     
-        // ВАЖНО: Используем Preview события, чтобы перехватить до ScrollViewer
+        // ВАЖНО: Используем Preview события для кнопок мыши,
+        // чтобы перехватить ДО ScrollViewer (который блокирует обычные события)
         PreviewMouseWheel += OnPreviewMouseWheel;
-        MouseLeftButtonDown += OnMouseLeftButtonDown;
-        MouseLeftButtonUp += OnMouseLeftButtonUp;
-        MouseMove += OnMouseMove;
+        PreviewMouseLeftButtonDown += OnPreviewMouseLeftButtonDown;
+        PreviewMouseLeftButtonUp += OnPreviewMouseLeftButtonUp;
+        MouseMove += OnMouseMove;  // MouseMove работает без Preview
         PreviewKeyDown += OnPreviewKeyDown;
     }
 
@@ -340,7 +341,10 @@ public partial class GanttChartControl : UserControl
         // Без Ctrl - позволяем ScrollViewer обрабатывать скролл
     }
     
-    private void OnMouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+    /// <summary>
+    /// Обработчик нажатия левой кнопки мыши (Preview для перехвата до ScrollViewer).
+    /// </summary>
+    private void OnPreviewMouseLeftButtonDown(object sender, MouseButtonEventArgs e)
     {
         var position = e.GetPosition(TaskLayer);
         var task = HitTestTask(position);
@@ -353,32 +357,45 @@ public partial class GanttChartControl : UserControl
             if (e.ClickCount == 2)
             {
                 TaskDoubleClicked?.Invoke(this, task);
+                e.Handled = true;
                 return;
             }
 
             // Проверяем, можно ли перетаскивать эту задачу
             if (!CanDragTask(task))
+            {
+                e.Handled = true; // Всё равно помечаем handled для выделения
                 return;
+            }
 
             // Определяем зону и тип операции
             var zone = GetHitZone(task, position);
-            var operation = DetermineOperation(zone, Keyboard.Modifiers);
+            var operation = DetermineOperation(task, zone, Keyboard.Modifiers);
 
             if (operation != DragOperation.None)
             {
                 StartDrag(task, position, operation);
-                e.Handled = true;
+                e.Handled = true; // Предотвращаем scroll и другие действия
+            }
+            else
+            {
+                e.Handled = true; // Задача выбрана, но drag не начат
             }
         }
         else
         {
             SelectedTask = null;
+            // Не помечаем Handled — пусть ScrollViewer работает при клике на пустое место
         }
     }
     
-    private void OnMouseLeftButtonUp(object sender, MouseButtonEventArgs e)
+    /// <summary>
+    /// Обработчик отпускания левой кнопки мыши (Preview для перехвата до ScrollViewer).
+    /// </summary>
+    private void OnPreviewMouseLeftButtonUp(object sender, MouseButtonEventArgs e)
     {
         if (!_dragState.IsActive) return;
+        
         var position = e.GetPosition(TaskLayer);
         CompleteDrag(position);
         e.Handled = true;
@@ -390,6 +407,14 @@ public partial class GanttChartControl : UserControl
 
         if (_dragState.IsActive)
         {
+            // Проверяем, что кнопка мыши всё ещё нажата
+            if (e.LeftButton != MouseButtonState.Pressed)
+            {
+                // Кнопка отпущена за пределами контрола — отменяем drag
+                CancelDrag();
+                return;
+            }
+            
             // Обновляем preview во время перетаскивания
             UpdateDragPreview(position);
         }
@@ -406,7 +431,6 @@ public partial class GanttChartControl : UserControl
         CancelDrag();
         e.Handled = true;
     }
-
 
     #endregion
 
@@ -633,7 +657,9 @@ public partial class GanttChartControl : UserControl
         if (SelectedTask == null || ProjectManager == null)
             return;
 
-        var index = GetRealTaskIndex(SelectedTask);
+        // Получаем индекс среди ВИДИМЫХ задач
+        var visibleTasks = GetVisibleTasks();
+        var index = visibleTasks.IndexOf(SelectedTask);
         if (index < 0)
             return;
 
@@ -741,422 +767,519 @@ public partial class GanttChartControl : UserControl
     
     #region Private Methods - Drag & Drop
 
-/// <summary>
-/// Проверяет, можно ли перетаскивать задачу.
-/// </summary>
-private bool CanDragTask(Task task)
-{
-    if (ProjectManager == null) return false;
-
-    // Не перетаскиваем группы
-    if (ProjectManager.IsGroup(task)) return false;
-
-    // Не перетаскиваем split-части
-    if (ProjectManager.IsPart(task)) return false;
-
-    return true;
-}
-
-/// <summary>
-/// Определяет зону попадания на баре задачи.
-/// </summary>
-private HitZone GetHitZone(Task task, Point position)
-{
-    var taskX = task.Start.Days * ColumnWidth;
-    var taskWidth = Math.Max(task.Duration.Days * ColumnWidth, ColumnWidth);
-
-    var relativeX = position.X - taskX;
-
-    if (relativeX < EdgeZoneWidth)
-        return HitZone.LeftEdge;
-
-    if (relativeX > taskWidth - EdgeZoneWidth)
-        return HitZone.RightEdge;
-
-    return HitZone.Center;
-}
-
-/// <summary>
-/// Определяет тип операции по зоне и модификаторам.
-/// </summary>
-private DragOperation DetermineOperation(HitZone zone, ModifierKeys modifiers)
-{
-    // Shift + любая зона = Reordering
-    if (modifiers.HasFlag(ModifierKeys.Shift))
-        return DragOperation.Reordering;
-
-    return zone switch
+    /// <summary>
+    /// Проверяет, можно ли перетаскивать задачу.
+    /// </summary>
+    private bool CanDragTask(Task task)
     {
-        HitZone.LeftEdge => DragOperation.ResizingStart,
-        HitZone.RightEdge => DragOperation.ResizingEnd,
-        HitZone.Center => DragOperation.Moving,
-        _ => DragOperation.None
-    };
-}
+        if (ProjectManager == null) return false;
 
-/// <summary>
-/// Обновляет курсор при наведении на задачу.
-/// </summary>
-private void UpdateCursor(Point position)
-{
-    var task = HitTestTask(position);
+        // Группы можно перетаскивать (только Moving, resize заблокирован в DetermineOperation)
+        // Split-части пока блокируем
+        if (ProjectManager.IsPart(task)) return false;
 
-    if (task != null && CanDragTask(task))
+        return true;
+    }
+
+    /// <summary>
+    /// Определяет зону попадания на баре задачи.
+    /// </summary>
+    private HitZone GetHitZone(Task task, Point position)
     {
-        var zone = GetHitZone(task, position);
+        var taskX = task.Start.Days * ColumnWidth;
+        var taskWidth = Math.Max(task.Duration.Days * ColumnWidth, ColumnWidth);
 
-        Cursor = zone switch
+        var relativeX = position.X - taskX;
+
+        if (relativeX < EdgeZoneWidth)
+            return HitZone.LeftEdge;
+
+        if (relativeX > taskWidth - EdgeZoneWidth)
+            return HitZone.RightEdge;
+
+        return HitZone.Center;
+    }
+
+    /// <summary>
+    /// Определяет тип операции по зоне, модификаторам и типу задачи.
+    /// </summary>
+    private DragOperation DetermineOperation(Task task, HitZone zone, ModifierKeys modifiers)
+    {
+        // Shift + любая зона = Reordering
+        if (modifiers.HasFlag(ModifierKeys.Shift))
+            return DragOperation.Reordering;
+
+        // Для групп запрещаем resize — только перемещение
+        if (ProjectManager != null && ProjectManager.IsGroup(task))
         {
-            HitZone.LeftEdge => Cursors.SizeWE,
-            HitZone.RightEdge => Cursors.SizeWE,
-            HitZone.Center => Cursors.SizeAll,
-            _ => Cursors.Arrow
+            return zone == HitZone.Center ? DragOperation.Moving : DragOperation.None;
+        }
+
+        return zone switch
+        {
+            HitZone.LeftEdge => DragOperation.ResizingStart,
+            HitZone.RightEdge => DragOperation.ResizingEnd,
+            HitZone.Center => DragOperation.Moving,
+            _ => DragOperation.None
         };
     }
-    else
+
+    /// <summary>
+    /// Обновляет курсор при наведении на задачу.
+    /// </summary>
+    private void UpdateCursor(Point position)
     {
+        var task = HitTestTask(position);
+
+        if (task != null && CanDragTask(task))
+        {
+            var zone = GetHitZone(task, position);
+            var isGroup = ProjectManager?.IsGroup(task) ?? false;
+
+            // Для групп показываем SizeAll только в центре
+            if (isGroup)
+            {
+                Cursor = zone == HitZone.Center ? Cursors.SizeAll : Cursors.Arrow;
+            }
+            else
+            {
+                Cursor = zone switch
+                {
+                    HitZone.LeftEdge => Cursors.SizeWE,
+                    HitZone.RightEdge => Cursors.SizeWE,
+                    HitZone.Center => Cursors.SizeAll,
+                    _ => Cursors.Arrow
+                };
+            }
+        }
+        else
+        {
+            Cursor = Cursors.Arrow;
+        }
+    }
+
+    /// <summary>
+    /// Начинает операцию перетаскивания.
+    /// </summary>
+    private void StartDrag(Task task, Point startPoint, DragOperation operation)
+    {
+        _dragState.Task = task;
+        _dragState.Operation = operation;
+        _dragState.StartPoint = startPoint;
+        _dragState.OriginalStart = task.Start;
+        _dragState.OriginalDuration = task.Duration;
+        _dragState.OriginalIndex = GetRealTaskIndex(task);
+
+        // Для групп сохраняем оригинальные позиции всех дочерних задач
+        if (ProjectManager != null && ProjectManager.IsGroup(task))
+        {
+            _originalChildPositions = new Dictionary<Guid, (TimeSpan, TimeSpan)>();
+            foreach (var member in ProjectManager.MembersOf(task))
+            {
+                _originalChildPositions[member.Id] = (member.Start, member.Duration);
+            }
+        }
+        else
+        {
+            _originalChildPositions = null;
+        }
+
+        // Захватываем мышь на уровне контрола
+        CaptureMouse();
+
+        // Устанавливаем курсор
+        Cursor = operation switch
+        {
+            DragOperation.Reordering => Cursors.SizeNS,
+            DragOperation.ResizingStart or DragOperation.ResizingEnd => Cursors.SizeWE,
+            _ => Cursors.SizeAll
+        };
+
+        // Рисуем начальный preview
+        RenderDragPreview();
+    }
+
+    /// <summary>
+    /// Обновляет preview во время перетаскивания.
+    /// </summary>
+    private void UpdateDragPreview(Point currentPoint)
+    {
+        if (!_dragState.IsActive || _dragState.Task == null || ProjectManager == null)
+            return;
+
+        var deltaX = currentPoint.X - _dragState.StartPoint.X;
+        var deltaY = currentPoint.Y - _dragState.StartPoint.Y;
+
+        switch (_dragState.Operation)
+        {
+            case DragOperation.Moving:
+                UpdateMovingPreview(deltaX);
+                break;
+
+            case DragOperation.ResizingStart:
+                UpdateResizingStartPreview(deltaX);
+                break;
+
+            case DragOperation.ResizingEnd:
+                UpdateResizingEndPreview(deltaX);
+                break;
+
+            case DragOperation.Reordering:
+                UpdateReorderingPreview(deltaY);
+                break;
+        }
+
+        RenderDragPreview();
+    }
+
+    /// <summary>
+    /// Обновляет preview для перемещения.
+    /// Для групп перемещает все дочерние задачи синхронно.
+    /// Для обычных задач автоматически расширяет границы родительской группы.
+    /// </summary>
+    private void UpdateMovingPreview(double deltaX)
+    {
+        if (_dragState.Task == null || ProjectManager == null) return;
+
+        // Конвертируем дельту в дни
+        var deltaDays = (int)Math.Round(deltaX / ColumnWidth);
+        var newStart = _dragState.OriginalStart + TimeSpan.FromDays(deltaDays);
+
+        // Не позволяем уйти в отрицательные дни
+        if (newStart < TimeSpan.Zero)
+            newStart = TimeSpan.Zero;
+
+        var task = _dragState.Task;
+
+        // Используем ProjectManager.SetStart для всех задач
+        // Это автоматически:
+        // - Для групп: перемещает все дочерние задачи
+        // - Для обычных задач: пересчитывает границы родительской группы
+        ProjectManager.SetStart(task, newStart);
+    }
+
+    /// <summary>
+    /// Обновляет preview для изменения начала (левый край).
+    /// </summary>
+    private void UpdateResizingStartPreview(double deltaX)
+    {
+        if (_dragState.Task == null) return;
+
+        var deltaDays = (int)Math.Round(deltaX / ColumnWidth);
+        var newStart = _dragState.OriginalStart + TimeSpan.FromDays(deltaDays);
+
+        // Вычисляем новую длительность (End остаётся на месте)
+        var originalEnd = _dragState.OriginalStart + _dragState.OriginalDuration;
+        var newDuration = originalEnd - newStart;
+
+        // Ограничения
+        if (newStart < TimeSpan.Zero)
+        {
+            newStart = TimeSpan.Zero;
+            newDuration = originalEnd;
+        }
+
+        if (newDuration < TimeSpan.FromDays(MinDurationDays))
+        {
+            newDuration = TimeSpan.FromDays(MinDurationDays);
+            newStart = originalEnd - newDuration;
+        }
+
+        // Напрямую устанавливаем значения
+        _dragState.Task.Start = newStart;
+        _dragState.Task.Duration = newDuration;
+        _dragState.Task.End = newStart + newDuration;
+    }
+
+    /// <summary>
+    /// Обновляет preview для изменения длительности (правый край).
+    /// </summary>
+    private void UpdateResizingEndPreview(double deltaX)
+    {
+        if (_dragState.Task == null) return;
+
+        var deltaDays = (int)Math.Round(deltaX / ColumnWidth);
+        var newDuration = _dragState.OriginalDuration + TimeSpan.FromDays(deltaDays);
+
+        // Минимальная длительность
+        if (newDuration < TimeSpan.FromDays(MinDurationDays))
+            newDuration = TimeSpan.FromDays(MinDurationDays);
+
+        // Напрямую устанавливаем Duration и End
+        _dragState.Task.Duration = newDuration;
+        _dragState.Task.End = _dragState.Task.Start + newDuration;
+    }
+
+    /// <summary>
+    /// Обновляет preview для переупорядочивания.
+    /// </summary>
+    private void UpdateReorderingPreview(double deltaY)
+    {
+        // Пока только визуальный preview, перемещение при завершении
+        // Линия-индикатор рисуется в RenderDragPreview
+    }
+
+    /// <summary>
+    /// Рисует preview перетаскивания.
+    /// Для групп также отображает preview всех дочерних задач.
+    /// </summary>
+    private void RenderDragPreview()
+    {
+        OverlayLayer.Children.Clear();
+
+        if (!_dragState.IsActive || _dragState.Task == null || ProjectManager == null)
+            return;
+
+        var task = _dragState.Task;
+        var visibleTasks = GetVisibleTasks();
+
+        if (_dragState.Operation == DragOperation.Reordering)
+        {
+            // Рисуем линию-индикатор позиции
+            RenderReorderIndicator();
+        }
+
+        // Если это группа — рисуем preview для всех членов
+        if (ProjectManager.IsGroup(task))
+        {
+            RenderGroupDragPreview(task, visibleTasks);
+        }
+        else
+        {
+            // Обычная задача — рисуем только её
+            RenderTaskDragPreview(task, visibleTasks, isMainTask: true);
+        }
+    }
+    
+        /// <summary>
+    /// Рисует preview для группы и всех её членов.
+    /// </summary>
+    private void RenderGroupDragPreview(Task groupTask, List<Task> visibleTasks)
+    {
+        // Сначала рисуем саму группу (основной выделенный элемент)
+        RenderTaskDragPreview(groupTask, visibleTasks, isMainTask: true);
+
+        // Затем рисуем все дочерние задачи
+        foreach (var member in ProjectManager!.MembersOf(groupTask))
+        {
+            // Пропускаем скрытые задачи (в свёрнутых подгруппах)
+            if (!visibleTasks.Contains(member))
+                continue;
+
+            RenderTaskDragPreview(member, visibleTasks, isMainTask: false);
+        }
+    }
+
+    /// <summary>
+    /// Рисует preview для одной задачи.
+    /// </summary>
+    /// <param name="task">Задача для отрисовки.</param>
+    /// <param name="visibleTasks">Список видимых задач.</param>
+    /// <param name="isMainTask">True если это основная перетаскиваемая задача.</param>
+    private void RenderTaskDragPreview(Task task, List<Task> visibleTasks, bool isMainTask)
+    {
+        var index = visibleTasks.IndexOf(task);
+        if (index < 0) return;
+
+        // Координаты бара
+        var x = task.Start.Days * ColumnWidth;
+        var y = index * RowHeight + BarSpacing / 2;
+        var width = Math.Max(task.Duration.Days * ColumnWidth, ColumnWidth);
+
+        // Определяем стиль в зависимости от типа задачи
+        byte alpha = isMainTask ? (byte)160 : (byte)100;
+        var fillColor = isMainTask 
+            ? Color.FromArgb(alpha, 70, 130, 180)   // Более яркий для основной
+            : Color.FromArgb(alpha, 100, 149, 237); // Бледнее для дочерних
+
+        // Полупрозрачный preview бара
+        var previewRect = new Rectangle
+        {
+            Width = width,
+            Height = BarHeight,
+            Fill = new SolidColorBrush(fillColor),
+            Stroke = isMainTask 
+                ? (FindResource("SelectionBrush") as Brush ?? Brushes.Blue)
+                : new SolidColorBrush(Color.FromArgb(180, 70, 130, 180)),
+            StrokeThickness = isMainTask ? 2 : 1,
+            StrokeDashArray = new DoubleCollection { 4, 2 },
+            RadiusX = 3,
+            RadiusY = 3
+        };
+
+        Canvas.SetLeft(previewRect, x);
+        Canvas.SetTop(previewRect, y);
+        OverlayLayer.Children.Add(previewRect);
+
+        // Рамка выделения только для основной задачи
+        if (isMainTask)
+        {
+            var selectionRect = new Rectangle
+            {
+                Width = width + 4,
+                Height = BarHeight + 4,
+                Stroke = FindResource("SelectionBrush") as Brush ?? Brushes.Blue,
+                StrokeThickness = 2,
+                Fill = Brushes.Transparent,
+                RadiusX = 4,
+                RadiusY = 4
+            };
+
+            Canvas.SetLeft(selectionRect, x - 2);
+            Canvas.SetTop(selectionRect, y - 2);
+            OverlayLayer.Children.Add(selectionRect);
+        }
+    }
+
+    /// <summary>
+    /// Рисует индикатор позиции для переупорядочивания.
+    /// </summary>
+    private void RenderReorderIndicator()
+    {
+        // Вычисляем целевую позицию на основе текущей позиции мыши
+        var mousePos = Mouse.GetPosition(TaskLayer);
+        var visibleTasks = GetVisibleTasks();
+        var targetIndex = (int)(mousePos.Y / RowHeight);
+        targetIndex = Math.Max(0, Math.Min(targetIndex, visibleTasks.Count - 1));
+
+        var indicatorY = targetIndex * RowHeight;
+
+        var line = new Line
+        {
+            X1 = 0,
+            Y1 = indicatorY,
+            X2 = TaskLayer.ActualWidth,
+            Y2 = indicatorY,
+            Stroke = FindResource("SelectionBrush") as Brush ?? Brushes.Blue,
+            StrokeThickness = 3
+        };
+
+        OverlayLayer.Children.Add(line);
+
+        // Треугольный указатель слева
+        var arrow = new Polygon
+        {
+            Points = new PointCollection
+            {
+                new Point(0, indicatorY - 6),
+                new Point(10, indicatorY),
+                new Point(0, indicatorY + 6)
+            },
+            Fill = FindResource("SelectionBrush") as Brush ?? Brushes.Blue
+        };
+
+        OverlayLayer.Children.Add(arrow);
+    }
+
+    /// <summary>
+    /// Завершает операцию перетаскивания.
+    /// </summary>
+    private void CompleteDrag(Point endPoint)
+    {
+        if (!_dragState.IsActive || _dragState.Task == null || ProjectManager == null)
+        {
+            CancelDrag();
+            return;
+        }
+
+        var task = _dragState.Task;
+        var operation = _dragState.Operation;
+
+        // Для Reordering — выполняем перемещение
+        if (operation == DragOperation.Reordering)
+        {
+            var visibleTasks = GetVisibleTasks();
+            var targetIndex = (int)(endPoint.Y / RowHeight);
+            targetIndex = Math.Max(0, Math.Min(targetIndex, visibleTasks.Count - 1));
+
+            if (targetIndex != _dragState.OriginalIndex)
+            {
+                MoveTaskToIndex(task, _dragState.OriginalIndex, targetIndex);
+            }
+        }
+
+        // Создаём событие для Undo/Redo
+        var args = new TaskDragEventArgs(
+            task,
+            operation,
+            _dragState.OriginalStart,
+            task.Start,
+            _dragState.OriginalDuration,
+            task.Duration,
+            _dragState.OriginalIndex,
+            GetRealTaskIndex(task));
+
+        // Очищаем состояние
+        FinalizeDrag();
+
+        // Вызываем событие
+        TaskDragged?.Invoke(this, args);
+    }
+
+    /// <summary>
+    /// Перемещает задачу на указанный индекс.
+    /// </summary>
+    private void MoveTaskToIndex(Task task, int fromIndex, int toIndex)
+    {
+        if (ProjectManager == null || fromIndex == toIndex) return;
+
+        // Используем ProjectManager.Move для перемещения
+        var offset = toIndex - fromIndex;
+        ProjectManager.Move(task, offset);
+    }
+
+    /// <summary>
+    /// Отменяет операцию перетаскивания.
+    /// </summary>
+    private void CancelDrag()
+    {
+        if (_dragState.IsActive && _dragState.Task != null && ProjectManager != null)
+        {
+            var task = _dragState.Task;
+
+            if (ProjectManager.IsGroup(task) && _originalChildPositions != null)
+            {
+                // Восстанавливаем позиции всех дочерних задач
+                foreach (var member in ProjectManager.MembersOf(task))
+                {
+                    if (_originalChildPositions.TryGetValue(member.Id, out var original))
+                    {
+                        member.Start = original.Start;
+                        member.Duration = original.Duration;
+                        member.End = original.Start + original.Duration;
+                    }
+                }
+                
+                // Восстанавливаем саму группу
+                task.Start = _dragState.OriginalStart;
+                task.Duration = _dragState.OriginalDuration;
+                task.End = _dragState.OriginalStart + _dragState.OriginalDuration;
+            }
+            else
+            {
+                // Обычная задача — восстанавливаем через SetStart для пересчёта группы
+                ProjectManager.SetStart(task, _dragState.OriginalStart);
+                ProjectManager.SetDuration(task, _dragState.OriginalDuration);
+            }
+        }
+
+        _originalChildPositions = null;
+        FinalizeDrag();
+    }
+
+    /// <summary>
+    /// Финализирует операцию перетаскивания.
+    /// </summary>
+    private void FinalizeDrag()
+    {
+        _dragState.Reset();
+        _originalChildPositions = null;
+        ReleaseMouseCapture();
         Cursor = Cursors.Arrow;
-    }
-}
-
-/// <summary>
-/// Начинает операцию перетаскивания.
-/// </summary>
-private void StartDrag(Task task, Point startPoint, DragOperation operation)
-{
-    _dragState.Task = task;
-    _dragState.Operation = operation;
-    _dragState.StartPoint = startPoint;
-    _dragState.OriginalStart = task.Start;
-    _dragState.OriginalDuration = task.Duration;
-    _dragState.OriginalIndex = GetRealTaskIndex(task);
-
-    // Захватываем мышь на уровне контрола, не TaskLayer
-    CaptureMouse();
-
-    // Устанавливаем курсор
-    Cursor = operation switch
-    {
-        DragOperation.Reordering => Cursors.SizeNS,
-        DragOperation.ResizingStart or DragOperation.ResizingEnd => Cursors.SizeWE,
-        _ => Cursors.SizeAll
-    };
-
-    // Рисуем начальный preview
-    RenderDragPreview();
-}
-
-/// <summary>
-/// Обновляет preview во время перетаскивания.
-/// </summary>
-private void UpdateDragPreview(Point currentPoint)
-{
-    if (!_dragState.IsActive || _dragState.Task == null || ProjectManager == null)
-        return;
-
-    var deltaX = currentPoint.X - _dragState.StartPoint.X;
-    var deltaY = currentPoint.Y - _dragState.StartPoint.Y;
-
-    switch (_dragState.Operation)
-    {
-        case DragOperation.Moving:
-            UpdateMovingPreview(deltaX);
-            break;
-
-        case DragOperation.ResizingStart:
-            UpdateResizingStartPreview(deltaX);
-            break;
-
-        case DragOperation.ResizingEnd:
-            UpdateResizingEndPreview(deltaX);
-            break;
-
-        case DragOperation.Reordering:
-            UpdateReorderingPreview(deltaY);
-            break;
+        OverlayLayer.Children.Clear();
+        RenderOverlay();
+        Render();
     }
 
-    RenderDragPreview();
-}
-
-/// <summary>
-/// Обновляет preview для перемещения.
-/// </summary>
-private void UpdateMovingPreview(double deltaX)
-{
-    if (_dragState.Task == null) return;
-
-    // Конвертируем дельту в дни
-    var deltaDays = (int)Math.Round(deltaX / ColumnWidth);
-    var newStart = _dragState.OriginalStart + TimeSpan.FromDays(deltaDays);
-
-    // Не позволяем уйти в отрицательные дни
-    if (newStart < TimeSpan.Zero)
-        newStart = TimeSpan.Zero;
-
-    // Напрямую устанавливаем Start, обходя логику зависимостей
-    _dragState.Task.Start = newStart;
-}
-
-/// <summary>
-/// Обновляет preview для изменения начала (левый край).
-/// </summary>
-private void UpdateResizingStartPreview(double deltaX)
-{
-    if (_dragState.Task == null) return;
-
-    var deltaDays = (int)Math.Round(deltaX / ColumnWidth);
-    var newStart = _dragState.OriginalStart + TimeSpan.FromDays(deltaDays);
-
-    // Вычисляем новую длительность (End остаётся на месте)
-    var originalEnd = _dragState.OriginalStart + _dragState.OriginalDuration;
-    var newDuration = originalEnd - newStart;
-
-    // Ограничения
-    if (newStart < TimeSpan.Zero)
-    {
-        newStart = TimeSpan.Zero;
-        newDuration = originalEnd;
-    }
-
-    if (newDuration < TimeSpan.FromDays(MinDurationDays))
-    {
-        newDuration = TimeSpan.FromDays(MinDurationDays);
-        newStart = originalEnd - newDuration;
-    }
-
-    // Напрямую устанавливаем значения
-    _dragState.Task.Start = newStart;
-    _dragState.Task.Duration = newDuration;
-}
-
-/// <summary>
-/// Обновляет preview для изменения длительности (правый край).
-/// </summary>
-private void UpdateResizingEndPreview(double deltaX)
-{
-    if (_dragState.Task == null) return;
-
-    var deltaDays = (int)Math.Round(deltaX / ColumnWidth);
-    var newDuration = _dragState.OriginalDuration + TimeSpan.FromDays(deltaDays);
-
-    // Минимальная длительность
-    if (newDuration < TimeSpan.FromDays(MinDurationDays))
-        newDuration = TimeSpan.FromDays(MinDurationDays);
-
-    // Напрямую устанавливаем Duration
-    _dragState.Task.Duration = newDuration;
-}
-
-/// <summary>
-/// Обновляет preview для переупорядочивания.
-/// </summary>
-private void UpdateReorderingPreview(double deltaY)
-{
-    // Пока только визуальный preview, перемещение при завершении
-    // Линия-индикатор рисуется в RenderDragPreview
-}
-
-/// <summary>
-/// Рисует preview перетаскивания.
-/// </summary>
-private void RenderDragPreview()
-{
-    OverlayLayer.Children.Clear();
-
-    if (!_dragState.IsActive || _dragState.Task == null || ProjectManager == null)
-        return;
-
-    var task = _dragState.Task;
-    var index = GetRealTaskIndex(task);
-    if (index < 0) return;
-
-    // Координаты бара
-    var x = task.Start.Days * ColumnWidth;
-    var y = index * RowHeight + BarSpacing / 2;
-    var width = Math.Max(task.Duration.Days * ColumnWidth, ColumnWidth);
-
-    if (_dragState.Operation == DragOperation.Reordering)
-    {
-        // Рисуем линию-индикатор позиции
-        RenderReorderIndicator();
-    }
-
-    // Полупрозрачный preview бара
-    var previewRect = new Rectangle
-    {
-        Width = width,
-        Height = BarHeight,
-        Fill = new SolidColorBrush(Color.FromArgb(128, 70, 130, 180)), // Полупрозрачный
-        Stroke = FindResource("SelectionBrush") as Brush ?? Brushes.Blue,
-        StrokeThickness = 2,
-        StrokeDashArray = new DoubleCollection { 4, 2 },
-        RadiusX = 3,
-        RadiusY = 3
-    };
-
-    Canvas.SetLeft(previewRect, x);
-    Canvas.SetTop(previewRect, y);
-
-    OverlayLayer.Children.Add(previewRect);
-
-    // Рамка выделения поверх
-    var selectionRect = new Rectangle
-    {
-        Width = width + 4,
-        Height = BarHeight + 4,
-        Stroke = FindResource("SelectionBrush") as Brush ?? Brushes.Blue,
-        StrokeThickness = 2,
-        Fill = Brushes.Transparent,
-        RadiusX = 4,
-        RadiusY = 4
-    };
-
-    Canvas.SetLeft(selectionRect, x - 2);
-    Canvas.SetTop(selectionRect, y - 2);
-
-    OverlayLayer.Children.Add(selectionRect);
-}
-
-/// <summary>
-/// Рисует индикатор позиции для переупорядочивания.
-/// </summary>
-private void RenderReorderIndicator()
-{
-    // Вычисляем целевую позицию на основе текущей позиции мыши
-    var mousePos = Mouse.GetPosition(TaskLayer);
-    var targetIndex = (int)(mousePos.Y / RowHeight);
-    targetIndex = Math.Max(0, Math.Min(targetIndex, (ProjectManager?.Tasks.Count ?? 1) - 1));
-
-    var indicatorY = targetIndex * RowHeight;
-
-    var line = new Line
-    {
-        X1 = 0,
-        Y1 = indicatorY,
-        X2 = TaskLayer.ActualWidth,
-        Y2 = indicatorY,
-        Stroke = FindResource("SelectionBrush") as Brush ?? Brushes.Blue,
-        StrokeThickness = 3
-    };
-
-    OverlayLayer.Children.Add(line);
-
-    // Треугольный указатель слева
-    var arrow = new Polygon
-    {
-        Points = new PointCollection
-        {
-            new Point(0, indicatorY - 6),
-            new Point(10, indicatorY),
-            new Point(0, indicatorY + 6)
-        },
-        Fill = FindResource("SelectionBrush") as Brush ?? Brushes.Blue
-    };
-
-    OverlayLayer.Children.Add(arrow);
-}
-
-/// <summary>
-/// Завершает операцию перетаскивания.
-/// </summary>
-private void CompleteDrag(Point endPoint)
-{
-    if (!_dragState.IsActive || _dragState.Task == null || ProjectManager == null)
-    {
-        CancelDrag();
-        return;
-    }
-
-    var task = _dragState.Task;
-    var operation = _dragState.Operation;
-
-    // Для Reordering — выполняем перемещение
-    if (operation == DragOperation.Reordering)
-    {
-        var targetIndex = (int)(endPoint.Y / RowHeight);
-        targetIndex = Math.Max(0, Math.Min(targetIndex, ProjectManager.Tasks.Count - 1));
-
-        if (targetIndex != _dragState.OriginalIndex)
-        {
-            MoveTaskToIndex(task, _dragState.OriginalIndex, targetIndex);
-        }
-    }
-
-    // Создаём событие для Undo/Redo
-    var args = new TaskDragEventArgs(
-        task,
-        operation,
-        _dragState.OriginalStart,
-        task.Start,
-        _dragState.OriginalDuration,
-        task.Duration,
-        _dragState.OriginalIndex,
-        GetRealTaskIndex(task));
-
-    // Очищаем состояние
-    FinalizeDrag();
-
-    // Вызываем событие
-    TaskDragged?.Invoke(this, args);
-}
-
-
-/// <summary>
-/// Перемещает задачу на указанный индекс.
-/// </summary>
-private void MoveTaskToIndex(Task task, int fromIndex, int toIndex)
-{
-    if (ProjectManager == null || fromIndex == toIndex) return;
-
-    // Получаем внутренний список задач
-    // ProjectManager.Tasks возвращает IEnumerable, но внутри скорее всего List
-    var tasksField = ProjectManager.GetType()
-        .GetField("_tasks", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
-
-    if (tasksField?.GetValue(ProjectManager) is System.Collections.IList tasksList)
-    {
-        if (fromIndex >= 0 && fromIndex < tasksList.Count &&
-            toIndex >= 0 && toIndex < tasksList.Count)
-        {
-            tasksList.Remove(task);
-
-            // Корректируем индекс если удаляли элемент до целевой позиции
-            if (fromIndex < toIndex)
-                toIndex--;
-
-            tasksList.Insert(toIndex, task);
-        }
-    }
-}
-
-/// <summary>
-/// Отменяет операцию перетаскивания.
-/// </summary>
-private void CancelDrag()
-{
-    if (_dragState.IsActive && _dragState.Task != null)
-    {
-        // Восстанавливаем оригинальные значения напрямую
-        _dragState.Task.Start = _dragState.OriginalStart;
-        _dragState.Task.Duration = _dragState.OriginalDuration;
-    }
-
-    FinalizeDrag();
-}
-
-/// <summary>
-/// Финализирует операцию перетаскивания.
-/// </summary>
-private void FinalizeDrag()
-{
-    _dragState.Reset();
-    ReleaseMouseCapture();  // На уровне контрола
-    Cursor = Cursors.Arrow;
-    OverlayLayer.Children.Clear();
-    RenderOverlay();
-    Render();
-}
-
-#endregion
+    #endregion
 }

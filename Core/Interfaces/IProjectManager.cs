@@ -36,7 +36,7 @@ public class Task
     /// Get the end time of this Task relative to the project start
     /// </summary>
     [JsonProperty("End")]
-    public TimeSpan End { get; internal set; }
+    public TimeSpan End { get; set; }
         
     /// <summary>
     /// Get the duration of this Task in days
