@@ -6,10 +6,11 @@ namespace Wpf.Controls;
 public enum DragOperation
 {
     None,
-    Moving,         // Перемещение по времени (горизонтально)
-    ResizingStart,  // Изменение начала (левый край)
-    ResizingEnd,    // Изменение длительности (правый край)
-    Reordering      // Переупорядочивание (вертикально)
+    Moving,             // Перемещение по времени (горизонтально)
+    ResizingStart,      // Изменение начала (левый край)
+    ResizingEnd,        // Изменение длительности (правый край)
+    Reordering,         // Переупорядочивание (вертикально)
+    ProgressAdjusting   // Изменение прогресса (средняя кнопка мыши)
 }
 
 /// <summary>
@@ -60,6 +61,11 @@ public class DragState
     public int OriginalIndex { get; set; }
 
     /// <summary>
+    /// Оригинальное значение Complete (для ProgressAdjusting).
+    /// </summary>
+    public float OriginalComplete { get; set; }
+
+    /// <summary>
     /// Сбрасывает состояние.
     /// </summary>
     public void Reset()
@@ -70,6 +76,7 @@ public class DragState
         OriginalStart = TimeSpan.Zero;
         OriginalDuration = TimeSpan.Zero;
         OriginalIndex = -1;
+        OriginalComplete = 0f;
     }
 
     /// <summary>
@@ -91,13 +98,16 @@ public class TaskDragEventArgs : EventArgs
     public TimeSpan NewDuration { get; }
     public int OldIndex { get; }
     public int NewIndex { get; }
+    public float OldComplete { get; }
+    public float NewComplete { get; }
 
     public TaskDragEventArgs(
         Core.Interfaces.Task task,
         DragOperation operation,
         TimeSpan oldStart, TimeSpan newStart,
         TimeSpan oldDuration, TimeSpan newDuration,
-        int oldIndex = -1, int newIndex = -1)
+        int oldIndex = -1, int newIndex = -1,
+        float oldComplete = 0f, float newComplete = 0f)
     {
         Task = task;
         Operation = operation;
@@ -107,5 +117,7 @@ public class TaskDragEventArgs : EventArgs
         NewDuration = newDuration;
         OldIndex = oldIndex;
         NewIndex = newIndex;
+        OldComplete = oldComplete;
+        NewComplete = newComplete;
     }
 }

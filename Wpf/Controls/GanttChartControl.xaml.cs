@@ -27,6 +27,7 @@ public partial class GanttChartControl : UserControl
     private readonly DragState _dragState = new();
     private const double EdgeZoneWidth = 8.0;  // Ширина зоны для resize
     private const double MinDurationDays = 1.0;
+    private const double PixelsPerProgressPercent = 3.0;
     private Dictionary<Guid, (TimeSpan Start, TimeSpan Duration)>? _originalChildPositions;
     
     #endregion
@@ -267,6 +268,8 @@ public partial class GanttChartControl : UserControl
         PreviewMouseLeftButtonUp += OnPreviewMouseLeftButtonUp;
         MouseMove += OnMouseMove;  // MouseMove работает без Preview
         PreviewKeyDown += OnPreviewKeyDown;
+        PreviewMouseDown += OnPreviewMouseDown;       // Для средней кнопки
+        PreviewMouseUp += OnPreviewMouseUp;           // Для средней кнопки
     }
 
     #endregion
@@ -407,16 +410,27 @@ public partial class GanttChartControl : UserControl
 
         if (_dragState.IsActive)
         {
-            // Проверяем, что кнопка мыши всё ещё нажата
-            if (e.LeftButton != MouseButtonState.Pressed)
+            // Проверяем состояние соответствующей кнопки
+            if (_dragState.Operation == DragOperation.ProgressAdjusting)
             {
-                // Кнопка отпущена за пределами контрола — отменяем drag
-                CancelDrag();
-                return;
+                // Для прогресса проверяем среднюю кнопку
+                if (e.MiddleButton != MouseButtonState.Pressed)
+                {
+                    CancelDrag();
+                    return;
+                }
+                UpdateProgressPreview(position);
             }
-            
-            // Обновляем preview во время перетаскивания
-            UpdateDragPreview(position);
+            else
+            {
+                // Для остальных операций проверяем левую кнопку
+                if (e.LeftButton != MouseButtonState.Pressed)
+                {
+                    CancelDrag();
+                    return;
+                }
+                UpdateDragPreview(position);
+            }
         }
         else
         {
@@ -429,6 +443,53 @@ public partial class GanttChartControl : UserControl
     {
         if (e.Key != Key.Escape || !_dragState.IsActive) return;
         CancelDrag();
+        e.Handled = true;
+    }
+    
+    /// <summary>
+    /// Обработчик нажатия кнопки мыши (для средней кнопки — изменение прогресса).
+    /// </summary>
+    private void OnPreviewMouseDown(object sender, MouseButtonEventArgs e)
+    {
+        // Обрабатываем только среднюю кнопку
+        if (e.ChangedButton != MouseButton.Middle)
+            return;
+
+        var position = e.GetPosition(TaskLayer);
+        var task = HitTestTask(position);
+
+        if (task != null)
+        {
+            // Проверяем, можно ли изменять прогресс этой задачи
+            if (!CanAdjustProgress(task))
+            {
+                e.Handled = true;
+                return;
+            }
+
+            // Выделяем задачу
+            SelectedTask = task;
+
+            // Начинаем операцию изменения прогресса
+            StartProgressAdjust(task, position);
+            e.Handled = true;
+        }
+    }
+    
+    /// <summary>
+    /// Обработчик отпускания кнопки мыши (для средней кнопки).
+    /// </summary>
+    private void OnPreviewMouseUp(object sender, MouseButtonEventArgs e)
+    {
+        // Обрабатываем только среднюю кнопку
+        if (e.ChangedButton != MouseButton.Middle)
+            return;
+
+        if (!_dragState.IsActive || _dragState.Operation != DragOperation.ProgressAdjusting)
+            return;
+
+        var position = e.GetPosition(TaskLayer);
+        CompleteProgressAdjust(position);
         e.Handled = true;
     }
 
@@ -766,6 +827,203 @@ public partial class GanttChartControl : UserControl
     #endregion
     
     #region Private Methods - Drag & Drop
+    
+    /// <summary>
+    /// Проверяет, можно ли изменять прогресс задачи.
+    /// </summary>
+    private bool CanAdjustProgress(Task task)
+    {
+        if (ProjectManager == null) return false;
+
+        // Нельзя изменять прогресс групп (он вычисляется автоматически)
+        if (ProjectManager.IsGroup(task)) return false;
+
+        // Нельзя изменять прогресс split-задач (только частей)
+        if (ProjectManager.IsSplit(task)) return false;
+
+        return true;
+    }
+    
+    /// <summary>
+    /// Начинает операцию изменения прогресса.
+    /// </summary>
+    private void StartProgressAdjust(Task task, Point startPoint)
+    {
+        _dragState.Task = task;
+        _dragState.Operation = DragOperation.ProgressAdjusting;
+        _dragState.StartPoint = startPoint;
+        _dragState.OriginalStart = task.Start;
+        _dragState.OriginalDuration = task.Duration;
+        _dragState.OriginalComplete = task.Complete;
+        _dragState.OriginalIndex = GetRealTaskIndex(task);
+
+        // Захватываем мышь
+        CaptureMouse();
+
+        // Устанавливаем курсор (горизонтальное изменение)
+        Cursor = Cursors.SizeWE;
+
+        // Рисуем начальный preview
+        RenderProgressPreview();
+    }
+    
+    /// <summary>
+    /// Обновляет preview при изменении прогресса.
+    /// </summary>
+    private void UpdateProgressPreview(Point currentPoint)
+    {
+        if (!_dragState.IsActive || _dragState.Task == null || ProjectManager == null)
+            return;
+
+        var deltaX = currentPoint.X - _dragState.StartPoint.X;
+        
+        // Вычисляем изменение прогресса
+        var deltaPercent = (float)(deltaX / PixelsPerProgressPercent / 100.0);
+        var newComplete = _dragState.OriginalComplete + deltaPercent;
+
+        // Ограничиваем 0-100%
+        newComplete = Math.Clamp(newComplete, 0f, 1f);
+
+        // Используем ProjectManager для установки (он обновит родительские группы)
+        ProjectManager.SetComplete(_dragState.Task, newComplete);
+
+        // Перерисовываем preview
+        RenderProgressPreview();
+    }
+    
+        /// <summary>
+    /// Рисует preview изменения прогресса с tooltip.
+    /// </summary>
+    private void RenderProgressPreview()
+    {
+        OverlayLayer.Children.Clear();
+
+        if (!_dragState.IsActive || _dragState.Task == null || ProjectManager == null)
+            return;
+
+        var task = _dragState.Task;
+        var visibleTasks = GetVisibleTasks();
+        var index = visibleTasks.IndexOf(task);
+        if (index < 0) return;
+
+        // Координаты бара
+        var x = task.Start.Days * ColumnWidth;
+        var y = index * RowHeight + BarSpacing / 2;
+        var width = Math.Max(task.Duration.Days * ColumnWidth, ColumnWidth);
+
+        // Рисуем рамку выделения
+        var selectionRect = new Rectangle
+        {
+            Width = width + 4,
+            Height = BarHeight + 4,
+            Stroke = Brushes.Orange, // Оранжевый для режима прогресса
+            StrokeThickness = 2,
+            Fill = Brushes.Transparent,
+            RadiusX = 4,
+            RadiusY = 4
+        };
+
+        Canvas.SetLeft(selectionRect, x - 2);
+        Canvas.SetTop(selectionRect, y - 2);
+        OverlayLayer.Children.Add(selectionRect);
+
+        // Рисуем индикатор прогресса внутри бара
+        var progressWidth = width * task.Complete;
+        var progressRect = new Rectangle
+        {
+            Width = Math.Max(progressWidth, 0),
+            Height = BarHeight,
+            Fill = new SolidColorBrush(Color.FromArgb(180, 255, 165, 0)), // Полупрозрачный оранжевый
+            RadiusX = 3,
+            RadiusY = 3
+        };
+
+        Canvas.SetLeft(progressRect, x);
+        Canvas.SetTop(progressRect, y);
+        OverlayLayer.Children.Add(progressRect);
+
+        // Tooltip с процентом (над баром)
+        var percent = (int)(task.Complete * 100);
+        var tooltipBorder = new Border
+        {
+            Background = new SolidColorBrush(Color.FromRgb(50, 50, 50)),
+            BorderBrush = Brushes.Orange,
+            BorderThickness = new Thickness(1),
+            CornerRadius = new CornerRadius(3),
+            Padding = new Thickness(6, 2, 6, 2),
+            Child = new TextBlock
+            {
+                Text = $"{percent}%",
+                Foreground = Brushes.White,
+                FontSize = 12,
+                FontWeight = FontWeights.Bold
+            }
+        };
+
+        tooltipBorder.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
+        
+        // Позиционируем tooltip над баром по центру
+        var tooltipX = x + (width - tooltipBorder.DesiredSize.Width) / 2;
+        var tooltipY = y - tooltipBorder.DesiredSize.Height - 4;
+
+        // Не даём выйти за верхнюю границу
+        if (tooltipY < 0)
+            tooltipY = y + BarHeight + 4;
+
+        Canvas.SetLeft(tooltipBorder, Math.Max(0, tooltipX));
+        Canvas.SetTop(tooltipBorder, Math.Max(0, tooltipY));
+        OverlayLayer.Children.Add(tooltipBorder);
+
+        // Направляющая линия (показывает направление изменения)
+        var arrowY = y + BarHeight / 2;
+        var arrowStartX = x + progressWidth;
+        
+        // Стрелка вправо (увеличение) или влево (уменьшение)
+        var arrowLine = new Line
+        {
+            X1 = arrowStartX,
+            Y1 = arrowY,
+            X2 = arrowStartX + (task.Complete < _dragState.OriginalComplete ? -15 : 15),
+            Y2 = arrowY,
+            Stroke = Brushes.Orange,
+            StrokeThickness = 2
+        };
+        OverlayLayer.Children.Add(arrowLine);
+    }
+        
+    /// <summary>
+    /// Завершает операцию изменения прогресса.
+    /// </summary>
+    private void CompleteProgressAdjust(Point endPoint)
+    {
+        if (!_dragState.IsActive || _dragState.Task == null || ProjectManager == null)
+        {
+            CancelDrag();
+            return;
+        }
+
+        var task = _dragState.Task;
+
+        // Создаём событие для Undo/Redo
+        var args = new TaskDragEventArgs(
+            task,
+            DragOperation.ProgressAdjusting,
+            _dragState.OriginalStart,
+            task.Start,
+            _dragState.OriginalDuration,
+            task.Duration,
+            _dragState.OriginalIndex,
+            GetRealTaskIndex(task),
+            _dragState.OriginalComplete,
+            task.Complete);
+
+        // Очищаем состояние
+        FinalizeDrag();
+
+        // Вызываем событие
+        TaskDragged?.Invoke(this, args);
+    }
+
 
     /// <summary>
     /// Проверяет, можно ли перетаскивать задачу.
@@ -960,43 +1218,54 @@ public partial class GanttChartControl : UserControl
 
     /// <summary>
     /// Обновляет preview для изменения начала (левый край).
+    /// Сохраняет End, изменяет Start и Duration.
+    /// Автоматически расширяет границы родительской группы.
     /// </summary>
     private void UpdateResizingStartPreview(double deltaX)
     {
-        if (_dragState.Task == null) return;
+        if (_dragState.Task == null || ProjectManager == null) return;
 
         var deltaDays = (int)Math.Round(deltaX / ColumnWidth);
         var newStart = _dragState.OriginalStart + TimeSpan.FromDays(deltaDays);
 
-        // Вычисляем новую длительность (End остаётся на месте)
+        // Вычисляем End, который должен остаться на месте
         var originalEnd = _dragState.OriginalStart + _dragState.OriginalDuration;
+        
+        // Вычисляем новую длительность
         var newDuration = originalEnd - newStart;
 
-        // Ограничения
+        // Ограничения: Start не может быть отрицательным
         if (newStart < TimeSpan.Zero)
         {
             newStart = TimeSpan.Zero;
-            newDuration = originalEnd;
+            newDuration = originalEnd; // Duration = End - 0
         }
 
+        // Ограничения: минимальная длительность
         if (newDuration < TimeSpan.FromDays(MinDurationDays))
         {
             newDuration = TimeSpan.FromDays(MinDurationDays);
             newStart = originalEnd - newDuration;
         }
 
-        // Напрямую устанавливаем значения
-        _dragState.Task.Start = newStart;
-        _dragState.Task.Duration = newDuration;
-        _dragState.Task.End = newStart + newDuration;
+        // Используем ProjectManager для изменений
+        // Шаг 1: SetStart сдвинет и End (сохраняя Duration)
+        ProjectManager.SetStart(_dragState.Task, newStart);
+        
+        // Шаг 2: SetEnd восстановит оригинальный End и пересчитает Duration
+        // Это также вызовет _RecalculateAncestorsSchedule для обновления границ группы
+        ProjectManager.SetEnd(_dragState.Task, originalEnd);
     }
+
 
     /// <summary>
     /// Обновляет preview для изменения длительности (правый край).
+    /// Сохраняет Start, изменяет End и Duration.
+    /// Автоматически расширяет границы родительской группы.
     /// </summary>
     private void UpdateResizingEndPreview(double deltaX)
     {
-        if (_dragState.Task == null) return;
+        if (_dragState.Task == null || ProjectManager == null) return;
 
         var deltaDays = (int)Math.Round(deltaX / ColumnWidth);
         var newDuration = _dragState.OriginalDuration + TimeSpan.FromDays(deltaDays);
@@ -1005,9 +1274,14 @@ public partial class GanttChartControl : UserControl
         if (newDuration < TimeSpan.FromDays(MinDurationDays))
             newDuration = TimeSpan.FromDays(MinDurationDays);
 
-        // Напрямую устанавливаем Duration и End
-        _dragState.Task.Duration = newDuration;
-        _dragState.Task.End = _dragState.Task.Start + newDuration;
+        // Вычисляем новый End
+        var newEnd = _dragState.Task.Start + newDuration;
+
+        // Используем ProjectManager.SetEnd — это автоматически:
+        // 1. Изменит End и Duration
+        // 2. Вызовет _RecalculateAncestorsSchedule для обновления границ группы
+        // 3. Вызовет _RecalculateSlack
+        ProjectManager.SetEnd(_dragState.Task, newEnd);
     }
 
     /// <summary>
@@ -1207,7 +1481,9 @@ public partial class GanttChartControl : UserControl
             _dragState.OriginalDuration,
             task.Duration,
             _dragState.OriginalIndex,
-            GetRealTaskIndex(task));
+            GetRealTaskIndex(task),
+            _dragState.OriginalComplete,
+            task.Complete);
 
         // Очищаем состояние
         FinalizeDrag();
@@ -1229,7 +1505,7 @@ public partial class GanttChartControl : UserControl
     }
 
     /// <summary>
-    /// Отменяет операцию перетаскивания.
+    /// Отменяет операцию перетаскивания и восстанавливает оригинальные значения.
     /// </summary>
     private void CancelDrag()
     {
@@ -1237,29 +1513,39 @@ public partial class GanttChartControl : UserControl
         {
             var task = _dragState.Task;
 
-            if (ProjectManager.IsGroup(task) && _originalChildPositions != null)
+            switch (_dragState.Operation)
             {
-                // Восстанавливаем позиции всех дочерних задач
-                foreach (var member in ProjectManager.MembersOf(task))
-                {
-                    if (_originalChildPositions.TryGetValue(member.Id, out var original))
+                case DragOperation.ProgressAdjusting:
+                    // Восстанавливаем прогресс
+                    ProjectManager.SetComplete(task, _dragState.OriginalComplete);
+                    break;
+
+                case DragOperation.Moving or DragOperation.ResizingStart or DragOperation.ResizingEnd:
+                    if (ProjectManager.IsGroup(task) && _originalChildPositions != null)
                     {
-                        member.Start = original.Start;
-                        member.Duration = original.Duration;
-                        member.End = original.Start + original.Duration;
+                        // Для групп: восстанавливаем позиции всех дочерних задач
+                        foreach (var member in ProjectManager.MembersOf(task))
+                        {
+                            if (_originalChildPositions.TryGetValue(member.Id, out var original))
+                            {
+                                member.Start = original.Start;
+                                member.Duration = original.Duration;
+                                member.End = original.Start + original.Duration;
+                            }
+                        }
+                        
+                        task.Start = _dragState.OriginalStart;
+                        task.Duration = _dragState.OriginalDuration;
+                        task.End = _dragState.OriginalStart + _dragState.OriginalDuration;
                     }
-                }
-                
-                // Восстанавливаем саму группу
-                task.Start = _dragState.OriginalStart;
-                task.Duration = _dragState.OriginalDuration;
-                task.End = _dragState.OriginalStart + _dragState.OriginalDuration;
-            }
-            else
-            {
-                // Обычная задача — восстанавливаем через SetStart для пересчёта группы
-                ProjectManager.SetStart(task, _dragState.OriginalStart);
-                ProjectManager.SetDuration(task, _dragState.OriginalDuration);
+                    else
+                    {
+                        // Для обычных задач
+                        var originalEnd = _dragState.OriginalStart + _dragState.OriginalDuration;
+                        ProjectManager.SetStart(task, _dragState.OriginalStart);
+                        ProjectManager.SetEnd(task, originalEnd);
+                    }
+                    break;
             }
         }
 

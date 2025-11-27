@@ -250,6 +250,7 @@
                                             <ColumnDefinition Width="Auto" />
                                             <ColumnDefinition Width="*" />
                                             <ColumnDefinition Width="Auto" />
+                                            <ColumnDefinition Width="Auto" />
                                         </Grid.ColumnDefinitions>
 
                                         <!-- Иконка -->
@@ -264,8 +265,17 @@
                                                    Text="{Binding Name}"
                                                    VerticalAlignment="Center" />
 
+                                        <!-- Индикатор заметки -->
+                                        <icon:MaterialIcon Grid.Column="2"
+                                                           Kind="NoteText"
+                                                           Width="12" Height="12"
+                                                           Margin="4,0,0,0"
+                                                           Foreground="{StaticResource TextSecondaryBrush}"
+                                                           Visibility="{Binding HasNote, Converter={StaticResource BoolToVisibilityConverter}}"
+                                                           ToolTip="{Binding NotePreview}" />
+
                                         <!-- Toggle для split-частей -->
-                                        <Button Grid.Column="2"
+                                        <Button Grid.Column="3"
                                                 Visibility="{Binding IsSplitRoot, Converter={StaticResource IsSplitToVisibilityConverter}}"
                                                 Command="{Binding ToggleShowPartsCommand}"
                                                 ToolTip="Показать/скрыть части"
@@ -358,7 +368,7 @@
                             </DataGridTemplateColumn>
 
                             <!-- Длительность -->
-                            <DataGridTemplateColumn Header="Дни" Width="50">
+                            <DataGridTemplateColumn Header="Дни" Width="45">
                                 <DataGridTemplateColumn.CellTemplate>
                                     <DataTemplate>
                                         <TextBlock Text="{Binding DurationDays}"
@@ -401,7 +411,113 @@
                                     </DataTemplate>
                                 </DataGridTemplateColumn.CellEditingTemplate>
                             </DataGridTemplateColumn>
+
+                            <!-- НОВОЕ: Deadline -->
+                            <DataGridTemplateColumn Header="Дедлайн" Width="90">
+                                <DataGridTemplateColumn.CellTemplate>
+                                    <DataTemplate>
+                                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
+                                            <!-- Иконка предупреждения если просрочено -->
+                                            <icon:MaterialIcon Kind="AlertCircle"
+                                                               Width="12" Height="12"
+                                                               Margin="0,0,2,0"
+                                                               Foreground="#D32F2F"
+                                                               Visibility="{Binding IsOverdue, Converter={StaticResource BoolToVisibilityConverter}}"
+                                                               ToolTip="Просрочено!" />
+                                            <TextBlock Text="{Binding DeadlineDate, StringFormat=dd.MM.yyyy}"
+                                                       Visibility="{Binding HasDeadline, Converter={StaticResource BoolToVisibilityConverter}}"
+                                                       Foreground="{Binding IsOverdue, Converter={StaticResource BoolToOverdueColorConverter}}" />
+                                            <TextBlock Text="—"
+                                                       Visibility="{Binding HasDeadline, Converter={StaticResource BoolToVisibilityConverter}, ConverterParameter=Inverse}"
+                                                       Foreground="{StaticResource TextSecondaryBrush}" />
+                                        </StackPanel>
+                                    </DataTemplate>
+                                </DataGridTemplateColumn.CellTemplate>
+                                <DataGridTemplateColumn.CellEditingTemplate>
+                                    <DataTemplate>
+                                        <DatePicker
+                                            SelectedDate="{Binding DeadlineDate, UpdateSourceTrigger=PropertyChanged}"
+                                            BorderThickness="0" />
+                                    </DataTemplate>
+                                </DataGridTemplateColumn.CellEditingTemplate>
+                            </DataGridTemplateColumn>
+
+                            <!-- НОВОЕ: Заметка с collapse -->
+                            <DataGridTemplateColumn Header="Заметка" Width="200" MinWidth="100">
+                                <DataGridTemplateColumn.CellTemplate>
+                                    <DataTemplate>
+                                        <Grid
+                                            Visibility="{Binding HasNote, Converter={StaticResource BoolToVisibilityConverter}}">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="Auto" />
+                                                <ColumnDefinition Width="*" />
+                                            </Grid.ColumnDefinitions>
+
+                                            <!-- Кнопка развернуть/свернуть -->
+                                            <Button Grid.Column="0"
+                                                    Command="{Binding ToggleNoteExpandedCommand}"
+                                                    Background="Transparent"
+                                                    BorderThickness="0"
+                                                    Padding="2"
+                                                    Cursor="Hand"
+                                                    VerticalAlignment="Top">
+                                                <icon:MaterialIcon Width="12" Height="12"
+                                                                   Foreground="{StaticResource TextSecondaryBrush}">
+                                                    <icon:MaterialIcon.Style>
+                                                        <Style TargetType="icon:MaterialIcon">
+                                                            <Setter Property="Kind" Value="ChevronRight" />
+                                                            <Style.Triggers>
+                                                                <DataTrigger Binding="{Binding IsNoteExpanded}"
+                                                                             Value="True">
+                                                                    <Setter Property="Kind" Value="ChevronDown" />
+                                                                </DataTrigger>
+                                                            </Style.Triggers>
+                                                        </Style>
+                                                    </icon:MaterialIcon.Style>
+                                                </icon:MaterialIcon>
+                                            </Button>
+
+                                            <!-- Текст заметки -->
+                                            <TextBlock Grid.Column="1"
+                                                       Margin="2,0,0,0"
+                                                       FontSize="11"
+                                                       Foreground="{StaticResource TextSecondaryBrush}"
+                                                       TextWrapping="NoWrap"
+                                                       TextTrimming="CharacterEllipsis"
+                                                       VerticalAlignment="Center">
+                                                <TextBlock.Style>
+                                                    <Style TargetType="TextBlock">
+                                                        <Setter Property="Text" Value="{Binding NotePreview}" />
+                                                        <Setter Property="TextWrapping" Value="NoWrap" />
+                                                        <Setter Property="MaxHeight" Value="20" />
+                                                        <Style.Triggers>
+                                                            <DataTrigger Binding="{Binding IsNoteExpanded}"
+                                                                         Value="True">
+                                                                <Setter Property="Text" Value="{Binding Note}" />
+                                                                <Setter Property="TextWrapping" Value="Wrap" />
+                                                                <Setter Property="MaxHeight" Value="100" />
+                                                            </DataTrigger>
+                                                        </Style.Triggers>
+                                                    </Style>
+                                                </TextBlock.Style>
+                                            </TextBlock>
+                                        </Grid>
+                                    </DataTemplate>
+                                </DataGridTemplateColumn.CellTemplate>
+                                <DataGridTemplateColumn.CellEditingTemplate>
+                                    <DataTemplate>
+                                        <TextBox Text="{Binding Note, UpdateSourceTrigger=PropertyChanged}"
+                                                 TextWrapping="Wrap"
+                                                 AcceptsReturn="True"
+                                                 MaxHeight="100"
+                                                 VerticalScrollBarVisibility="Auto"
+                                                 BorderThickness="0"
+                                                 Padding="2" />
+                                    </DataTemplate>
+                                </DataGridTemplateColumn.CellEditingTemplate>
+                            </DataGridTemplateColumn>
                         </DataGrid.Columns>
+
                     </DataGrid>
                 </DockPanel>
             </Grid>

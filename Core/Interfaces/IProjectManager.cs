@@ -65,6 +65,25 @@ public class Task
     /// </summary>
     [JsonProperty("Slack")]
     public TimeSpan Slack { get; internal set; }
+    
+    /// <summary>
+    /// Крайний срок выполнения задачи (Deadline).
+    /// Null означает отсутствие дедлайна.
+    /// End не может быть позже Deadline.
+    /// </summary>
+    public TimeSpan? Deadline { get; set; }
+
+    /// <summary>
+    /// Заметка к задаче.
+    /// </summary>
+    public string? Note { get; set; }
+
+    /// <summary>
+    /// Флаг развёрнутости заметки в UI (не сериализуется).
+    /// </summary>
+    [System.Text.Json.Serialization.JsonIgnore]
+    [Newtonsoft.Json.JsonIgnore]
+    public bool IsNoteExpanded { get; set; }
 
     /// <summary>
     /// Convert this Task to a descriptive string

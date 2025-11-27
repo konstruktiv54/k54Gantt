@@ -170,6 +170,131 @@ public partial class TaskItemViewModel : ObservableObject
             }
         }
     }
+    
+    /// <summary>
+    /// Дата дедлайна (редактируемая).
+    /// Null означает отсутствие дедлайна.
+    /// </summary>
+    public DateTime? DeadlineDate
+    {
+        get => Task.Deadline.HasValue 
+            ? _projectStart.Add(Task.Deadline.Value) 
+            : null;
+        set
+        {
+            if (value.HasValue)
+            {
+                var newDeadline = value.Value - _projectStart;
+                if (newDeadline < TimeSpan.Zero)
+                    newDeadline = TimeSpan.Zero;
+
+                // Deadline не может быть раньше End
+                if (newDeadline < Task.End)
+                    newDeadline = Task.End;
+
+                if (Task.Deadline != newDeadline)
+                {
+                    _manager.SetDeadline(Task, newDeadline);
+                    OnPropertyChanged();
+                    OnPropertyChanged(nameof(HasDeadline));
+                    OnPropertyChanged(nameof(DaysUntilDeadline));
+                    OnPropertyChanged(nameof(IsOverdue));
+                    _onTaskModified?.Invoke();
+                }
+            }
+            else
+            {
+                if (Task.Deadline.HasValue)
+                {
+                    _manager.SetDeadline(Task, null);
+                    OnPropertyChanged();
+                    OnPropertyChanged(nameof(HasDeadline));
+                    OnPropertyChanged(nameof(DaysUntilDeadline));
+                    OnPropertyChanged(nameof(IsOverdue));
+                    _onTaskModified?.Invoke();
+                }
+            }
+        }
+    }
+    
+    /// <summary>
+    /// Есть ли дедлайн у задачи.
+    /// </summary>
+    public bool HasDeadline => Task.Deadline.HasValue;
+
+    /// <summary>
+    /// Дней до дедлайна (отрицательное = просрочено).
+    /// </summary>
+    public int? DaysUntilDeadline
+    {
+        get
+        {
+            if (!Task.Deadline.HasValue) return null;
+            return (int)(Task.Deadline.Value - Task.End).TotalDays;
+        }
+    }
+
+    /// <summary>
+    /// Просрочена ли задача (End > Deadline).
+    /// </summary>
+    public bool IsOverdue => Task.Deadline.HasValue && Task.End > Task.Deadline.Value;
+
+    /// <summary>
+    /// Заметка к задаче (редактируемая).
+    /// </summary>
+    public string? Note
+    {
+        get => Task.Note;
+        set
+        {
+            if (Task.Note != value)
+            {
+                _manager.SetNote(Task, value);
+                OnPropertyChanged();
+                OnPropertyChanged(nameof(HasNote));
+                OnPropertyChanged(nameof(NotePreview));
+                _onTaskModified?.Invoke();
+            }
+        }
+    }
+
+    /// <summary>
+    /// Есть ли заметка у задачи.
+    /// </summary>
+    public bool HasNote => !string.IsNullOrWhiteSpace(Task.Note);
+
+    /// <summary>
+    /// Превью заметки (первые 50 символов).
+    /// </summary>
+    public string NotePreview
+    {
+        get
+        {
+            if (string.IsNullOrWhiteSpace(Task.Note))
+                return string.Empty;
+
+            var preview = Task.Note
+                .Replace("\r\n", " ")
+                .Replace("\n", " ")
+                .Replace("\r", " ")
+                .Trim();
+
+            return preview.Length > 50 
+                ? preview.Substring(0, 47) + "..." 
+                : preview;
+        }
+    }
+
+    /// <summary>
+    /// Развёрнута ли заметка в UI.
+    /// </summary>
+    [ObservableProperty]
+    private bool _isNoteExpanded;
+
+    partial void OnIsNoteExpandedChanged(bool value)
+    {
+        Task.IsNoteExpanded = value;
+    }
 
     #endregion
 
@@ -270,12 +395,40 @@ public partial class TaskItemViewModel : ObservableObject
     /// <summary>
     /// Tooltip с полной информацией о задаче.
     /// </summary>
-    public string ToolTip =>
-        $"{Name}\n" +
-        $"Начало: {StartDate:dd.MM.yyyy}\n" +
-        $"Окончание: {EndDate:dd.MM.yyyy}\n" +
-        $"Длительность: {DurationDays} дн.\n" +
-        $"Выполнено: {CompletePercent}%";
+    public string ToolTip
+    {
+        get
+        {
+            var tip = $"{Name}\n" +
+                      $"Начало: {StartDate:dd.MM.yyyy}\n" +
+                      $"Окончание: {EndDate:dd.MM.yyyy}\n" +
+                      $"Длительность: {DurationDays} дн.\n" +
+                      $"Выполнено: {CompletePercent}%";
+
+            if (HasDeadline)
+            {
+                tip += $"\nДедлайн: {DeadlineDate:dd.MM.yyyy}";
+                
+                if (DaysUntilDeadline.HasValue)
+                {
+                    var days = DaysUntilDeadline.Value;
+                    if (days > 0)
+                        tip += $" (осталось {days} дн.)";
+                    else if (days < 0)
+                        tip += $" (просрочено на {-days} дн.)";
+                    else
+                        tip += " (сегодня!)";
+                }
+            }
+
+            if (HasNote)
+            {
+                tip += $"\n\nЗаметка: {NotePreview}";
+            }
+
+            return tip;
+        }
+    }
 
     #endregion
 
@@ -304,6 +457,15 @@ public partial class TaskItemViewModel : ObservableObject
             IsExpanded = !IsExpanded;
         }
     }
+    
+    /// <summary>
+    /// Команда переключения развёрнутости заметки.
+    /// </summary>
+    [RelayCommand]
+    private void ToggleNoteExpanded()
+    {
+        IsNoteExpanded = !IsNoteExpanded;
+    }
 
     #endregion
 
@@ -322,6 +484,14 @@ public partial class TaskItemViewModel : ObservableObject
         OnPropertyChanged(nameof(CompletePercent));
         OnPropertyChanged(nameof(IconKind));
         OnPropertyChanged(nameof(ToolTip));
+        
+        OnPropertyChanged(nameof(DeadlineDate));
+        OnPropertyChanged(nameof(HasDeadline));
+        OnPropertyChanged(nameof(DaysUntilDeadline));
+        OnPropertyChanged(nameof(IsOverdue));
+        OnPropertyChanged(nameof(Note));
+        OnPropertyChanged(nameof(HasNote));
+        OnPropertyChanged(nameof(NotePreview));
     }
 
     /// <summary>

@@ -17,6 +17,12 @@ public class TaskRenderer
 {
     private readonly GanttChartControl _control;
     private ResourceService? _resourceService;
+    
+    // Ширина области для отображения ресурсов слева от бара
+    private const double ResourceAreaWidth = 80.0;
+    
+    // Отступ между областью ресурсов и баром
+    private const double ResourceGap = 4.0;
 
     // Кэшированные кисти
     private Brush? _taskBarBrush;
@@ -24,6 +30,9 @@ public class TaskRenderer
     private Brush? _taskBarBorderBrush;
     private Brush? _groupTaskBrush;
     private Brush? _textBrush;
+    private Brush? _taskCompletedBrush;      // Зелёный для 100%
+    private Brush? _deadlineBrush;           // Красный для deadline
+    private Brush? _noteBrush;               // Серый для заметок
 
     public TaskRenderer(GanttChartControl control)
     {
@@ -68,6 +77,12 @@ public class TaskRenderer
         _taskBarBorderBrush ??= _control.FindResource("TaskBarBorderBrush") as Brush ?? Brushes.DarkBlue;
         _groupTaskBrush ??= _control.FindResource("GroupTaskBrush") as Brush ?? Brushes.DimGray;
         _textBrush ??= Brushes.White;
+        
+        _taskCompletedBrush ??= _control.TryFindResource("TaskCompletedBrush") as Brush 
+                                ?? new SolidColorBrush(Color.FromRgb(76, 175, 80));  // Green 500
+        _deadlineBrush ??= _control.TryFindResource("DeadlineBrush") as Brush 
+                           ?? new SolidColorBrush(Color.FromRgb(244, 67, 54));       // Red 500
+        _noteBrush ??= _control.TryFindResource("TextSecondaryBrush") as Brush ?? Brushes.Gray;
     }
 
     private bool IsTaskHidden(Task task)
@@ -114,19 +129,35 @@ public class TaskRenderer
             RenderRegularTask(canvas, task, x, y, width, barHeight);
         }
 
-        // Имя задачи (справа от бара или внутри)
+        // Deadline (красная стена) — ПОСЛЕ бара, ПЕРЕД текстом
+        RenderDeadline(canvas, task, y, barHeight);
+
+        // Ресурсы СЛЕВА от бара
+        RenderTaskResources(canvas, task, x, y);
+
+        // Имя задачи справа от бара
         RenderTaskName(canvas, task, x, y, width, barHeight);
+        
+        // Заметка справа от имени — возвращает ширину текста имени
+        RenderTaskNote(canvas, task, x, y, width, barHeight);
     }
 
     private void RenderRegularTask(Canvas canvas, Task task, double x, double y, double width, double height)
     {
+        // Определяем цвет бара: зелёный для 100%, обычный для остальных
+        var isCompleted = task.Complete >= 1.0f;
+        var barBrush = isCompleted ? _taskCompletedBrush : _taskBarBrush;
+        var progressBrush = isCompleted ? _taskCompletedBrush : _taskBarProgressBrush;
+
         // Основной бар
         var taskBar = new Rectangle
         {
             Width = width,
             Height = height,
-            Fill = _taskBarBrush,
-            Stroke = _taskBarBorderBrush,
+            Fill = barBrush,
+            Stroke = isCompleted 
+                ? new SolidColorBrush(Color.FromRgb(56, 142, 60))  // Darker green border
+                : _taskBarBorderBrush,
             StrokeThickness = 1,
             RadiusX = 3,
             RadiusY = 3
@@ -136,8 +167,8 @@ public class TaskRenderer
         Canvas.SetTop(taskBar, y);
         canvas.Children.Add(taskBar);
 
-        // Прогресс
-        if (task.Complete > 0)
+        // Прогресс (только если НЕ 100%)
+        if (task.Complete > 0 && task.Complete < 1.0f)
         {
             var progressWidth = width * task.Complete;
 
@@ -145,7 +176,7 @@ public class TaskRenderer
             {
                 Width = Math.Max(progressWidth, 2),
                 Height = height,
-                Fill = _taskBarProgressBrush,
+                Fill = progressBrush,
                 RadiusX = 3,
                 RadiusY = 3,
                 Clip = new RectangleGeometry(new Rect(0, 0, progressWidth, height), 3, 3)
@@ -156,8 +187,25 @@ public class TaskRenderer
             canvas.Children.Add(progressBar);
         }
 
-        // Процент выполнения (внутри бара, если достаточно места)
-        if (width >= 40 && task.Complete > 0 && task.Complete < 1)
+        // Иконка галочки для 100% задач
+        if (isCompleted)
+        {
+            var checkMark = new TextBlock
+            {
+                Text = "✓",
+                FontSize = 12,
+                FontWeight = FontWeights.Bold,
+                Foreground = Brushes.White
+            };
+
+            checkMark.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
+            
+            Canvas.SetLeft(checkMark, x + (width - checkMark.DesiredSize.Width) / 2);
+            Canvas.SetTop(checkMark, y + (height - checkMark.DesiredSize.Height) / 2);
+            canvas.Children.Add(checkMark);
+        }
+        // Процент выполнения (внутри бара, если достаточно места и не 100%)
+        else if (width >= 40 && task.Complete > 0)
         {
             var percentText = new TextBlock
             {
@@ -314,48 +362,22 @@ public class TaskRenderer
             }
         }
     }
-
-    private void RenderTaskName(Canvas canvas, Task task, double x, double y, double width, double height)
-    {
-        // Инициалы ресурсов НАД баром
-        RenderResourceInitials(canvas, task, x, y, width);
-
-        // Имя задачи справа от бара
-        var name = task.Name ?? "Без названия";
     
-        if (name.Length > 30)
-            name = name.Substring(0, 27) + "...";
-
-        var nameText = new TextBlock
-        {
-            Text = name,
-            FontSize = 11,
-            Foreground = _control.FindResource("TextPrimaryBrush") as Brush ?? Brushes.Black
-        };
-
-        nameText.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
-
-        var textX = x + width + 8;
-        var textY = y + (height - nameText.DesiredSize.Height) / 2;
-
-        Canvas.SetLeft(nameText, textX);
-        Canvas.SetTop(nameText, textY);
-        canvas.Children.Add(nameText);
-    }
-    
-    private void RenderResourceInitials(Canvas canvas, Task task, double x, double y, double width)
+    /// <summary>
+    /// Отрисовывает инициалы назначенных ресурсов слева от бара.
+    /// </summary>
+    private void RenderTaskResources(Canvas canvas, Task task, double x, double y)
     {
-        if (_resourceService == null)
-            return;
+        if (_resourceService == null) return;
 
         var initials = _resourceService.GetInitialsForTask(task.Id, ", ");
-    
-        if (string.IsNullOrEmpty(initials))
-            return;
+        if (string.IsNullOrEmpty(initials)) return;
 
         // Получаем ресурсы для определения цвета (берём цвет первого ресурса)
         var resources = _resourceService.GetResourcesForTask(task.Id).ToList();
-        Brush textBrush = _control.FindResource("TextSecondaryBrush") as Brush ?? Brushes.Gray;
+        
+        // Определяем цвет текста
+        Brush textBrush = _control.TryFindResource("TextSecondaryBrush") as Brush ?? Brushes.Gray;
 
         if (resources.Count > 0 && !string.IsNullOrEmpty(resources[0].ColorHex))
         {
@@ -370,26 +392,186 @@ public class TaskRenderer
             }
         }
 
-        var initialsText = new TextBlock
+        // Создаём TextBlock с выравниванием по правому краю
+        var resourceText = new TextBlock
         {
             Text = initials,
-            FontSize = 9,
+            FontSize = 10,
             FontWeight = FontWeights.SemiBold,
-            Foreground = textBrush
+            Foreground = textBrush,
+            TextAlignment = TextAlignment.Right,
+            Width = ResourceAreaWidth
         };
 
-        initialsText.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
+        // Позиционируем: правый край области ресурсов = левый край бара - отступ
+        var resourceX = x - ResourceGap - ResourceAreaWidth;
+        var resourceY = y + (_control.BarHeight - 14) / 2; // Центрируем по вертикали
 
-        // Позиционируем над баром по центру
-        var textX = x + (width - initialsText.DesiredSize.Width) / 2;
-        var textY = y - initialsText.DesiredSize.Height - 2;
+        // Если выходит за левую границу — корректируем
+        if (resourceX < 0)
+        {
+            resourceX = 2;
+            resourceText.Width = Math.Max(x - ResourceGap - 2, 0);
+            
+            // Если места совсем нет - не показываем
+            if (resourceText.Width < 20) return;
+        }
 
-        // Не показываем если выходит за верхнюю границу
-        if (textY < 0)
-            textY = y - 12; // Показываем чуть выше если места совсем мало
+        Canvas.SetLeft(resourceText, resourceX);
+        Canvas.SetTop(resourceText, resourceY);
 
-        Canvas.SetLeft(initialsText, Math.Max(x, textX));
-        Canvas.SetTop(initialsText, Math.Max(0, textY));
-        canvas.Children.Add(initialsText);
+        canvas.Children.Add(resourceText);
+    }
+
+    /// <summary>
+    /// Отрисовывает название задачи справа от бара.
+    /// </summary>
+    private void RenderTaskName(Canvas canvas, Task task, double x, double y, double width, double height)
+    {
+        // Имя задачи справа от бара
+        var name = task.Name ?? "Без названия";
+    
+        if (name.Length > 30)
+            name = name.Substring(0, 27) + "...";
+
+        var nameText = new TextBlock
+        {
+            Text = name,
+            FontSize = 11,
+            Foreground = _control.TryFindResource("TextPrimaryBrush") as Brush ?? Brushes.Black
+        };
+
+        nameText.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
+
+        var textX = x + width + 8;
+        var textY = y + (height - nameText.DesiredSize.Height) / 2;
+
+        Canvas.SetLeft(nameText, textX);
+        Canvas.SetTop(nameText, textY);
+        canvas.Children.Add(nameText);
+    }
+    
+    /// <summary>
+    /// Отрисовывает красную "стену" deadline.
+    /// </summary>
+    private void RenderDeadline(Canvas canvas, Task task, double y, double barHeight)
+    {
+        if (!task.Deadline.HasValue) return;
+
+        var deadlineX = task.Deadline.Value.Days * _control.ColumnWidth;
+        
+        // Толщина "стены"
+        const double wallWidth = 4;
+        
+        // Высота стены (немного выше бара)
+        var wallHeight = barHeight + 8;
+        var wallY = y - 4;
+
+        // Основная стена
+        var wall = new Rectangle
+        {
+            Width = wallWidth,
+            Height = wallHeight,
+            Fill = _deadlineBrush,
+            RadiusX = 1,
+            RadiusY = 1
+        };
+
+        Canvas.SetLeft(wall, deadlineX - wallWidth / 2);
+        Canvas.SetTop(wall, wallY);
+        canvas.Children.Add(wall);
+
+        // Верхний "флажок" для визуального выделения
+        var flag = new Polygon
+        {
+            Points = new PointCollection
+            {
+                new Point(0, 0),
+                new Point(8, 0),
+                new Point(8, 6),
+                new Point(4, 4),
+                new Point(0, 6)
+            },
+            Fill = _deadlineBrush
+        };
+
+        Canvas.SetLeft(flag, deadlineX - wallWidth / 2);
+        Canvas.SetTop(flag, wallY - 6);
+        canvas.Children.Add(flag);
+
+        // Тень/свечение для эффекта "стены"
+        var glow = new Rectangle
+        {
+            Width = wallWidth + 4,
+            Height = wallHeight,
+            Fill = new SolidColorBrush(Color.FromArgb(50, 244, 67, 54)),
+            RadiusX = 2,
+            RadiusY = 2
+        };
+
+        Canvas.SetLeft(glow, deadlineX - wallWidth / 2 - 2);
+        Canvas.SetTop(glow, wallY);
+        Panel.SetZIndex(glow, -1); // Под основной стеной
+        canvas.Children.Add(glow);
+    }
+
+    /// <summary>
+    /// Отрисовывает заметку справа от названия задачи.
+    /// </summary>
+    private void RenderTaskNote(Canvas canvas, Task task, double x, double y, double width, double barHeight)
+    {
+        if (string.IsNullOrWhiteSpace(task.Note)) return;
+
+        // Позиция после имени задачи (примерная)
+        var nameWidth = EstimateTextWidth(task.Name ?? "Без названия", 11);
+        var noteX = x + width + 8 + nameWidth + 12; // 8 = отступ от бара, 12 = отступ от имени
+
+        var noteY = y + (barHeight - 12) / 2;
+
+        // Разделитель
+        var separator = new TextBlock
+        {
+            Text = "│",
+            FontSize = 10,
+            Foreground = new SolidColorBrush(Color.FromRgb(200, 200, 200))
+        };
+        Canvas.SetLeft(separator, noteX - 8);
+        Canvas.SetTop(separator, noteY);
+        canvas.Children.Add(separator);
+
+        // Текст заметки (обрезаем если длинный)
+        var noteText = task.Note;
+        var maxNoteLength = 50;
+        
+        if (noteText.Length > maxNoteLength)
+        {
+            noteText = noteText.Substring(0, maxNoteLength - 3) + "...";
+        }
+
+        // Заменяем переносы строк на пробелы для однострочного отображения
+        noteText = noteText.Replace("\r\n", " ").Replace("\n", " ").Replace("\r", " ");
+
+        var noteTextBlock = new TextBlock
+        {
+            Text = noteText,
+            FontSize = 10,
+            FontStyle = FontStyles.Italic,
+            Foreground = _noteBrush,
+            MaxWidth = 300,
+            TextTrimming = TextTrimming.CharacterEllipsis
+        };
+
+        Canvas.SetLeft(noteTextBlock, noteX);
+        Canvas.SetTop(noteTextBlock, noteY);
+        canvas.Children.Add(noteTextBlock);
+    }
+    
+    /// <summary>
+    /// Оценивает ширину текста в пикселях.
+    /// </summary>
+    private double EstimateTextWidth(string text, double fontSize)
+    {
+        // Примерная оценка: fontSize * 0.6 на символ
+        return Math.Min(text.Length * fontSize * 0.55, 200);
     }
 }

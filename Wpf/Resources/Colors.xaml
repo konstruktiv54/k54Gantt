@@ -79,5 +79,25 @@
     <SolidColorBrush x:Key="SuccessBrush" Color="{StaticResource SuccessColor}"/>
     <SolidColorBrush x:Key="WarningBrush" Color="{StaticResource WarningColor}"/>
     <SolidColorBrush x:Key="ErrorBrush" Color="{StaticResource ErrorColor}"/>
+    
+    <!-- Зелёный для завершённых задач (100%) -->
+    <Color x:Key="TaskCompletedColor">#4CAF50</Color>
+    <Color x:Key="TaskCompletedBorderColor">#388E3C</Color>
+    <SolidColorBrush x:Key="TaskCompletedBrush" Color="{StaticResource TaskCompletedColor}"/>
+    <SolidColorBrush x:Key="TaskCompletedBorderBrush" Color="{StaticResource TaskCompletedBorderColor}"/>
+    
+    <!-- Красный для дедлайна -->
+    <Color x:Key="DeadlineColor">#F44336</Color>
+    <Color x:Key="DeadlineGlowColor">#33F44336</Color>
+    <SolidColorBrush x:Key="DeadlineBrush" Color="{StaticResource DeadlineColor}"/>
+    <SolidColorBrush x:Key="DeadlineGlowBrush" Color="{StaticResource DeadlineGlowColor}"/>
+    
+    <!-- Цвет для просроченных задач -->
+    <Color x:Key="OverdueColor">#D32F2F</Color>
+    <SolidColorBrush x:Key="OverdueBrush" Color="{StaticResource OverdueColor}"/>
+    
+    <!-- Цвет для заметок -->
+    <Color x:Key="NoteTextColor">#757575</Color>
+    <SolidColorBrush x:Key="NoteTextBrush" Color="{StaticResource NoteTextColor}"/>
 
 </ResourceDictionary>

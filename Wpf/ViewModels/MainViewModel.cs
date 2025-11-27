@@ -873,6 +873,7 @@ public partial class MainViewModel : ObservableObject
             DragOperation.ResizingStart => $"Изменено начало '{e.Task.Name}'",
             DragOperation.ResizingEnd => $"Изменена длительность '{e.Task.Name}'",
             DragOperation.Reordering => $"Задача '{e.Task.Name}' переупорядочена",
+            DragOperation.ProgressAdjusting => $"Прогресс '{e.Task.Name}': {(int)(e.NewComplete * 100)}%",
             _ => "Готов"
         };
     }
