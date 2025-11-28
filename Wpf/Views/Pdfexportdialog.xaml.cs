@@ -1,6 +1,12 @@
 // ═══════════════════════════════════════════════════════════════════════════════
-// ДИАЛОГ ЭКСПОРТА В PDF - Code-behind (v3)
+// ДИАЛОГ ЭКСПОРТА В PDF - Code-behind (v4)
 // Файл: Wpf/Views/PdfExportDialog.xaml.cs
+// ═══════════════════════════════════════════════════════════════════════════════
+//
+// Изменения v4:
+// - Добавлена обработка радиокнопки FitToPageRadioButton
+// - Передача режима FitToSinglePage в настройки
+//
 // ═══════════════════════════════════════════════════════════════════════════════
 
 using System;
@@ -42,7 +48,8 @@ public partial class PdfExportDialog : Window
             Scale = ScaleSlider.Value / 100.0,
             Dpi = GetSelectedDpi(),
             PaperFormat = GetSelectedPaperFormat(),
-            Orientation = GetSelectedOrientation()
+            Orientation = GetSelectedOrientation(),
+            FitToSinglePage = FitToPageRadioButton.IsChecked ?? true  // ← ДОБАВЛЕНО
         };
 
         OpenAfterExport = OpenAfterExportCheckBox.IsChecked ?? true;

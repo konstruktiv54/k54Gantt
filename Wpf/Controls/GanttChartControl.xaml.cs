@@ -2214,30 +2214,38 @@ public partial class GanttChartControl : UserControl
     #endregion
     
     #region PDF Export
-    
+
     /// <summary>
     /// Вычисляет полную ширину рабочей области диаграммы.
+    /// Основывается на РЕАЛЬНОМ содержимом (максимальная дата + буфер).
     /// </summary>
     private double GetFullChartWidth()
     {
         if (ProjectManager == null)
             return TaskLayer.Width > 0 ? TaskLayer.Width : TaskLayer.ActualWidth;
 
-        // Находим максимальный End среди всех задач
+        // ═══════════════════════════════════════════════════════════════════
+        // Находим максимальную дату среди всех элементов
+        // ═══════════════════════════════════════════════════════════════════
         var maxEnd = TimeSpan.Zero;
+
         foreach (var task in ProjectManager.Tasks)
         {
+            // Конец задачи
             var taskEnd = task.Start + task.Duration;
             if (taskEnd > maxEnd)
                 maxEnd = taskEnd;
 
+            // Deadline (если есть)
             if (task.Deadline.HasValue && task.Deadline.Value > maxEnd)
                 maxEnd = task.Deadline.Value;
         }
 
-        // Добавляем запас справа (10% или минимум 5 дней)
-        var buffer = Math.Max(maxEnd.TotalDays * 0.1, 5);
-        var totalDays = maxEnd.TotalDays + buffer;
+        // ═══════════════════════════════════════════════════════════════════
+        // Добавляем буфер справа (10% или минимум 5 дней для "воздуха")
+        // ═══════════════════════════════════════════════════════════════════
+        var bufferDays = Math.Max(maxEnd.TotalDays * 0.1, 5.0);
+        var totalDays = maxEnd.TotalDays + bufferDays;
 
         var calculatedWidth = totalDays * ColumnWidth;
         var canvasWidth = TaskLayer.Width > 0 ? TaskLayer.Width : TaskLayer.ActualWidth;
@@ -2247,23 +2255,42 @@ public partial class GanttChartControl : UserControl
 
     /// <summary>
     /// Вычисляет полную высоту рабочей области диаграммы.
+    /// Основывается на РЕАЛЬНОМ количестве видимых задач БЕЗ искусственного буфера.
     /// </summary>
     private double GetFullChartHeight()
     {
         if (ProjectManager == null)
             return TaskLayer.Height > 0 ? TaskLayer.Height : TaskLayer.ActualHeight;
 
+        // ═══════════════════════════════════════════════════════════════════
+        // Считаем ТОЛЬКО видимые задачи
+        // ═══════════════════════════════════════════════════════════════════
         var visibleTasks = GetVisibleTasks();
-        var taskCount = visibleTasks.Count;
+        var visibleTaskCount = visibleTasks.Count;
 
-        // Добавляем запас снизу
-        var buffer = 2;
-        var totalRows = taskCount + buffer;
+        // ═══════════════════════════════════════════════════════════════════
+        // Вычисляем высоту БЕЗ лишнего буфера
+        // ═══════════════════════════════════════════════════════════════════
+        // Формула: (количество задач × высота строки) + небольшой отступ снизу
+        var calculatedHeight = visibleTaskCount * RowHeight + BarSpacing;
 
-        var calculatedHeight = totalRows * RowHeight;
+        // Сравниваем с реальным размером Canvas
         var canvasHeight = TaskLayer.Height > 0 ? TaskLayer.Height : TaskLayer.ActualHeight;
 
-        return Math.Max(calculatedHeight, canvasHeight);
+        // Берём максимум, но НЕ добавляем искусственные строки
+        var result = Math.Max(calculatedHeight, canvasHeight);
+
+        // ═══════════════════════════════════════════════════════════════════
+        // ДИАГНОСТИКА (можно удалить после отладки)
+        // ═══════════════════════════════════════════════════════════════════
+        System.Diagnostics.Debug.WriteLine($"GetFullChartHeight Analysis:");
+        System.Diagnostics.Debug.WriteLine($"  Visible tasks: {visibleTaskCount}");
+        System.Diagnostics.Debug.WriteLine($"  RowHeight: {RowHeight}");
+        System.Diagnostics.Debug.WriteLine($"  Calculated: {calculatedHeight:F0}");
+        System.Diagnostics.Debug.WriteLine($"  Canvas Height: {canvasHeight:F0}");
+        System.Diagnostics.Debug.WriteLine($"  Result: {result:F0}");
+
+        return result;
     }
 
     /// <summary>
