@@ -1,8 +1,9 @@
 // ═══════════════════════════════════════════════════════════════════════════════
-// ДИАЛОГ НАСТРОЕК ЭКСПОРТА В PDF - Code-behind
+// ДИАЛОГ ЭКСПОРТА В PDF - Code-behind (v3)
 // Файл: Wpf/Views/PdfExportDialog.xaml.cs
 // ═══════════════════════════════════════════════════════════════════════════════
 
+using System;
 using System.Windows;
 using System.Windows.Controls;
 using Wpf.Services;
@@ -29,7 +30,6 @@ public partial class PdfExportDialog : Window
 
     private void ExportButton_Click(object sender, RoutedEventArgs e)
     {
-        // Собираем настройки
         Settings = new PdfExportSettings
         {
             ProjectName = string.IsNullOrWhiteSpace(ProjectNameTextBox.Text) 
@@ -41,6 +41,7 @@ public partial class PdfExportDialog : Window
             ShowPageNumbers = ShowPageNumbersCheckBox.IsChecked ?? true,
             Scale = ScaleSlider.Value / 100.0,
             Dpi = GetSelectedDpi(),
+            PaperFormat = GetSelectedPaperFormat(),
             Orientation = GetSelectedOrientation()
         };
 
@@ -59,6 +60,25 @@ public partial class PdfExportDialog : Window
         return 150;
     }
 
+    private PaperFormat GetSelectedPaperFormat()
+    {
+        if (PaperFormatComboBox.SelectedItem is ComboBoxItem item && item.Tag is string tag)
+        {
+            return tag switch
+            {
+                "A4" => PaperFormat.A4,
+                "A3" => PaperFormat.A3,
+                "A2" => PaperFormat.A2,
+                "A1" => PaperFormat.A1,
+                "Letter" => PaperFormat.Letter,
+                "Legal" => PaperFormat.Legal,
+                "Tabloid" => PaperFormat.Tabloid,
+                _ => PaperFormat.A4
+            };
+        }
+        return PaperFormat.A4;
+    }
+
     private PageOrientation GetSelectedOrientation()
     {
         if (OrientationComboBox.SelectedItem is ComboBoxItem item && item.Tag is string tag)
@@ -68,61 +88,3 @@ public partial class PdfExportDialog : Window
         return PageOrientation.Landscape;
     }
 }
-
-
-// ═══════════════════════════════════════════════════════════════════════════════
-// МЕТОД ДЛЯ ВЫЗОВА ДИАЛОГА И ЭКСПОРТА
-// Добавьте в GanttChartControl или MainWindowViewModel
-// ═══════════════════════════════════════════════════════════════════════════════
-
-/*
-    /// <summary>
-    /// Показывает диалог и экспортирует диаграмму в PDF.
-    /// </summary>
-    public bool ExportToPdfWithDialog(string? defaultProjectName = null)
-    {
-        var dialog = new PdfExportDialog(defaultProjectName ?? "Диаграмма Ганта")
-        {
-            Owner = Window.GetWindow(this)
-        };
-
-        if (dialog.ShowDialog() != true || dialog.Settings == null)
-            return false;
-
-        var saveDialog = new Microsoft.Win32.SaveFileDialog
-        {
-            Filter = "PDF документ (*.pdf)|*.pdf",
-            DefaultExt = ".pdf",
-            FileName = $"{dialog.Settings.ProjectName}_{DateTime.Now:yyyy-MM-dd}"
-        };
-
-        if (saveDialog.ShowDialog() != true)
-            return false;
-
-        try
-        {
-            var exportService = new GanttPdfExportService();
-            exportService.ExportToPdfFile(ChartCanvas, HeaderCanvas, saveDialog.FileName, dialog.Settings);
-
-            if (dialog.OpenAfterExport)
-            {
-                System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
-                {
-                    FileName = saveDialog.FileName,
-                    UseShellExecute = true
-                });
-            }
-
-            return true;
-        }
-        catch (Exception ex)
-        {
-            MessageBox.Show(
-                $"Ошибка при экспорте:\n{ex.Message}",
-                "Ошибка",
-                MessageBoxButton.OK,
-                MessageBoxImage.Error);
-            return false;
-        }
-    }
-*/

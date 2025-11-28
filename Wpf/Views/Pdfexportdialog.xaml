@@ -2,15 +2,14 @@
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         Title="Экспорт в PDF"
-        Width="400"
-        Height="420"
+        Width="420"
+        Height="520"
         WindowStartupLocation="CenterOwner"
         ResizeMode="NoResize"
         ShowInTaskbar="False"
         Background="#FAFAFA">
 
     <Window.Resources>
-        <!-- Локальные стили без MaterialDesign -->
         <Style x:Key="TitleStyle" TargetType="TextBlock">
             <Setter Property="FontSize" Value="18"/>
             <Setter Property="FontWeight" Value="Medium"/>
@@ -24,6 +23,12 @@
             <Setter Property="FontSize" Value="12"/>
             <Setter Property="Foreground" Value="#424242"/>
             <Setter Property="Margin" Value="0,0,0,4"/>
+        </Style>
+        <Style x:Key="SectionStyle" TargetType="TextBlock">
+            <Setter Property="FontSize" Value="13"/>
+            <Setter Property="FontWeight" Value="Medium"/>
+            <Setter Property="Foreground" Value="#1976D2"/>
+            <Setter Property="Margin" Value="0,12,0,8"/>
         </Style>
         <Style TargetType="TextBox">
             <Setter Property="Padding" Value="8,6"/>
@@ -47,7 +52,7 @@
         </Grid.RowDefinitions>
 
         <!-- Заголовок -->
-        <StackPanel Grid.Row="0" Margin="0,0,0,16">
+        <StackPanel Grid.Row="0" Margin="0,0,0,8">
             <TextBlock Text="Экспорт диаграммы Ганта в PDF" 
                        Style="{StaticResource TitleStyle}"/>
             <TextBlock Text="Настройте параметры экспорта" 
@@ -61,48 +66,85 @@
                 
                 <!-- Название проекта -->
                 <TextBlock Text="Название проекта" Style="{StaticResource LabelStyle}"/>
-                <TextBox x:Name="ProjectNameTextBox"
-                         Margin="0,0,0,16"/>
+                <TextBox x:Name="ProjectNameTextBox" Margin="0,0,0,8"/>
 
-                <!-- Ориентация -->
-                <TextBlock Text="Ориентация страницы" Style="{StaticResource LabelStyle}"/>
-                <ComboBox x:Name="OrientationComboBox"
-                          SelectedIndex="0"
-                          Margin="0,0,0,16">
-                    <ComboBoxItem Content="Альбомная (Landscape)" Tag="Landscape"/>
-                    <ComboBoxItem Content="Книжная (Portrait)" Tag="Portrait"/>
-                </ComboBox>
+                <!-- ═══════════════════════════════════════════════════════════════ -->
+                <!-- СЕКЦИЯ: Страница -->
+                <!-- ═══════════════════════════════════════════════════════════════ -->
+                <TextBlock Text="📄 Страница" Style="{StaticResource SectionStyle}"/>
+                
+                <Grid Margin="0,0,0,8">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="12"/>
+                        <ColumnDefinition Width="*"/>
+                    </Grid.ColumnDefinitions>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                    </Grid.RowDefinitions>
+                    
+                    <!-- Формат -->
+                    <TextBlock Grid.Row="0" Grid.Column="0" Text="Формат" Style="{StaticResource LabelStyle}"/>
+                    <ComboBox x:Name="PaperFormatComboBox" Grid.Row="1" Grid.Column="0" SelectedIndex="0">
+                        <ComboBoxItem Content="A4 (210 × 297 мм)" Tag="A4"/>
+                        <ComboBoxItem Content="A3 (297 × 420 мм)" Tag="A3"/>
+                        <ComboBoxItem Content="A2 (420 × 594 мм)" Tag="A2"/>
+                        <ComboBoxItem Content="A1 (594 × 841 мм)" Tag="A1"/>
+                        <ComboBoxItem Content="Letter (8.5 × 11 in)" Tag="Letter"/>
+                        <ComboBoxItem Content="Legal (8.5 × 14 in)" Tag="Legal"/>
+                        <ComboBoxItem Content="Tabloid (11 × 17 in)" Tag="Tabloid"/>
+                    </ComboBox>
+                    
+                    <!-- Ориентация -->
+                    <TextBlock Grid.Row="0" Grid.Column="2" Text="Ориентация" Style="{StaticResource LabelStyle}"/>
+                    <ComboBox x:Name="OrientationComboBox" Grid.Row="1" Grid.Column="2" SelectedIndex="0">
+                        <ComboBoxItem Content="Альбомная" Tag="Landscape"/>
+                        <ComboBoxItem Content="Книжная" Tag="Portrait"/>
+                    </ComboBox>
+                </Grid>
+
+                <!-- ═══════════════════════════════════════════════════════════════ -->
+                <!-- СЕКЦИЯ: Качество и масштаб -->
+                <!-- ═══════════════════════════════════════════════════════════════ -->
+                <TextBlock Text="🔍 Качество и масштаб" Style="{StaticResource SectionStyle}"/>
 
                 <!-- Качество -->
-                <TextBlock Text="Качество" Style="{StaticResource LabelStyle}"/>
-                <ComboBox x:Name="QualityComboBox"
-                          SelectedIndex="1"
-                          Margin="0,0,0,16">
-                    <ComboBoxItem Content="Экранное (96 DPI)" Tag="96"/>
-                    <ComboBoxItem Content="Среднее (150 DPI)" Tag="150"/>
-                    <ComboBoxItem Content="Высокое (200 DPI)" Tag="200"/>
-                    <ComboBoxItem Content="Печатное (300 DPI)" Tag="300"/>
+                <TextBlock Text="Качество (DPI)" Style="{StaticResource LabelStyle}"/>
+                <ComboBox x:Name="QualityComboBox" SelectedIndex="1" Margin="0,0,0,8">
+                    <ComboBoxItem Content="Черновик (96 DPI) — быстро, малый размер" Tag="96"/>
+                    <ComboBoxItem Content="Стандарт (150 DPI) — оптимально" Tag="150"/>
+                    <ComboBoxItem Content="Высокое (200 DPI) — для печати" Tag="200"/>
+                    <ComboBoxItem Content="Максимальное (300 DPI) — большой файл" Tag="300"/>
                 </ComboBox>
 
                 <!-- Масштаб -->
-                <TextBlock Text="Масштаб" Style="{StaticResource LabelStyle}"/>
-                <Grid Margin="0,0,0,16">
+                <TextBlock Style="{StaticResource LabelStyle}">
+                    <Run Text="Масштаб диаграммы"/>
+                </TextBlock>
+                <Grid Margin="0,0,0,4">
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="*"/>
                         <ColumnDefinition Width="60"/>
                     </Grid.ColumnDefinitions>
                     <Slider x:Name="ScaleSlider" 
-                            Minimum="50" Maximum="150" Value="100"
-                            TickFrequency="10" IsSnapToTickEnabled="True"
+                            Minimum="50" Maximum="200" Value="100"
+                            TickFrequency="25" IsSnapToTickEnabled="True"
+                            TickPlacement="BottomRight"
                             VerticalAlignment="Center"/>
                     <TextBlock Grid.Column="1" 
                                Text="{Binding ElementName=ScaleSlider, Path=Value, StringFormat={}{0:0}%}"
                                VerticalAlignment="Center"
-                               HorizontalAlignment="Right"/>
+                               HorizontalAlignment="Right"
+                               FontWeight="Medium"/>
                 </Grid>
+                <TextBlock Text="100% = вписывается в ширину страницы. Меньше = мельче, больше помещается." 
+                           FontSize="10" Foreground="#9E9E9E" Margin="0,0,0,8" TextWrapping="Wrap"/>
 
-                <!-- Опции -->
-                <TextBlock Text="Опции" Style="{StaticResource LabelStyle}" Margin="0,8,0,8"/>
+                <!-- ═══════════════════════════════════════════════════════════════ -->
+                <!-- СЕКЦИЯ: Опции -->
+                <!-- ═══════════════════════════════════════════════════════════════ -->
+                <TextBlock Text="⚙️ Опции" Style="{StaticResource SectionStyle}"/>
                 
                 <CheckBox x:Name="ShowHeaderCheckBox" 
                           Content="Показывать заголовок на каждой странице"
@@ -140,7 +182,7 @@
                     Click="ExportButton_Click"
                     IsDefault="True"
                     Padding="16,8"
-                    Width="110"
+                    Width="120"
                     Background="#1976D2"
                     Foreground="White"
                     BorderThickness="0"/>

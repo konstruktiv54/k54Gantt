@@ -2213,39 +2213,134 @@ public partial class GanttChartControl : UserControl
 
     #endregion
     
-        #region PDF Export
-
+    #region PDF Export
+    
     /// <summary>
-    /// Экспортирует диаграмму в PDF с диалогом настроек.
+    /// Вычисляет полную ширину рабочей области диаграммы.
     /// </summary>
-    public bool ExportToPdf(string? projectName = null)
+    private double GetFullChartWidth()
     {
-        var name = projectName ?? "Диаграмма Ганта";
-        
-        var settings = new PdfExportSettings
-        {
-            ProjectName = name,
-            ExportDate = DateTime.Now,
-            Dpi = 150,
-            Scale = 1.0,
-            Orientation = PageOrientation.Landscape
-        };
+        if (ProjectManager == null)
+            return TaskLayer.Width > 0 ? TaskLayer.Width : TaskLayer.ActualWidth;
 
-        var exportService = new GanttPdfExportService();
-        
-        // ChartCanvas и HeaderCanvas — это элементы внутри GanttChartControl
-        // Они доступны здесь напрямую
-        return exportService.ExportToPdf(ChartCanvas, HeaderCanvas, settings);
+        // Находим максимальный End среди всех задач
+        var maxEnd = TimeSpan.Zero;
+        foreach (var task in ProjectManager.Tasks)
+        {
+            var taskEnd = task.Start + task.Duration;
+            if (taskEnd > maxEnd)
+                maxEnd = taskEnd;
+
+            if (task.Deadline.HasValue && task.Deadline.Value > maxEnd)
+                maxEnd = task.Deadline.Value;
+        }
+
+        // Добавляем запас справа (10% или минимум 5 дней)
+        var buffer = Math.Max(maxEnd.TotalDays * 0.1, 5);
+        var totalDays = maxEnd.TotalDays + buffer;
+
+        var calculatedWidth = totalDays * ColumnWidth;
+        var canvasWidth = TaskLayer.Width > 0 ? TaskLayer.Width : TaskLayer.ActualWidth;
+
+        return Math.Max(calculatedWidth, canvasWidth);
     }
 
     /// <summary>
+    /// Вычисляет полную высоту рабочей области диаграммы.
+    /// </summary>
+    private double GetFullChartHeight()
+    {
+        if (ProjectManager == null)
+            return TaskLayer.Height > 0 ? TaskLayer.Height : TaskLayer.ActualHeight;
+
+        var visibleTasks = GetVisibleTasks();
+        var taskCount = visibleTasks.Count;
+
+        // Добавляем запас снизу
+        var buffer = 2;
+        var totalRows = taskCount + buffer;
+
+        var calculatedHeight = totalRows * RowHeight;
+        var canvasHeight = TaskLayer.Height > 0 ? TaskLayer.Height : TaskLayer.ActualHeight;
+
+        return Math.Max(calculatedHeight, canvasHeight);
+    }
+
+    /// <summary>
+    /// Быстрый экспорт в PDF без диалога настроек.
+    /// </summary>
+    public bool ExportToPdf(string? projectName = null)
+    {
+        var settings = new PdfExportSettings
+        {
+            ProjectName = projectName ?? "Диаграмма Ганта",
+            ExportDate = DateTime.Now,
+            Dpi = 150,
+            Scale = 1.0,
+            PaperFormat = PaperFormat.A4,
+            Orientation = PageOrientation.Landscape
+        };
+
+        var fullWidth = GetFullChartWidth();
+        var fullHeight = GetFullChartHeight();
+
+        var exportService = new GanttPdfExportService();
+        return exportService.ExportToPdf(
+            TaskLayer, 
+            HeaderCanvas, 
+            fullWidth, 
+            fullHeight,
+            InvalidateChart,  // ← Callback для перерисовки!
+            settings);
+    }
+    
+
+    /// <summary>
     /// Экспортирует диаграмму в PDF с диалогом настроек.
+    /// </summary>
+    /// <summary>
+    /// Экспортирует диаграмму в PDF с диалогом настроек.
+    /// Экспортирует ВСЮ рабочую область, включая невидимую часть.
+    /// </summary>
+    /// <summary>
+    /// Экспортирует диаграмму в PDF с диалогом настроек.
+    /// Экспортирует ВСЮ рабочую область, включая невидимую часть.
     /// </summary>
     public bool ExportToPdfWithDialog(string? defaultProjectName = null)
     {
+        
+        // ═══════════════════════════════════════════════════════════════
+        // ДИАГНОСТИКА - удалить после отладки
+        // ═══════════════════════════════════════════════════════════════
+        var diagInfo = $@"=== ДИАГНОСТИКА ЭКСПОРТА ===
+
+TaskLayer:
+  ActualWidth: {TaskLayer.ActualWidth}
+  ActualHeight: {TaskLayer.ActualHeight}
+  Width: {TaskLayer.Width}
+  Height: {TaskLayer.Height}
+  Children.Count: {TaskLayer.Children.Count}
+
+HeaderLayer:
+  ActualWidth: {HeaderCanvas.ActualWidth}
+  ActualHeight: {HeaderCanvas.ActualHeight}
+  Width: {HeaderCanvas.Width}
+  Height: {HeaderCanvas.Height}
+  Children.Count: {HeaderCanvas.Children.Count}
+
+Вычисленные размеры:
+  GetFullChartWidth(): {GetFullChartWidth()}
+  GetFullChartHeight(): {GetFullChartHeight()}
+
+ProjectManager:
+  Tasks.Count: {ProjectManager?.Tasks.Count ?? 0}
+";
+    
+        MessageBox.Show(diagInfo, "Диагностика", MessageBoxButton.OK, MessageBoxImage.Information);
+
         var dialog = new PdfExportDialog(defaultProjectName ?? "Диаграмма Ганта")
         {
-            Owner = Window.GetWindow(this)  // this = GanttChartControl (DependencyObject)
+            Owner = Window.GetWindow(this)
         };
 
         if (dialog.ShowDialog() != true || dialog.Settings == null)
@@ -2263,8 +2358,22 @@ public partial class GanttChartControl : UserControl
 
         try
         {
+            var fullWidth = GetFullChartWidth();
+            var fullHeight = GetFullChartHeight();
+
             var exportService = new GanttPdfExportService();
-            exportService.ExportToPdfFile(ChartCanvas, HeaderCanvas, saveDialog.FileName, dialog.Settings);
+
+            // ═══════════════════════════════════════════════════════════════════
+            // КЛЮЧЕВОЕ: Передаём callback InvalidateChart
+            // ═══════════════════════════════════════════════════════════════════
+            exportService.ExportToPdfFile(
+                TaskLayer,
+                HeaderCanvas,
+                fullWidth,
+                fullHeight,
+                saveDialog.FileName,
+                InvalidateChart,  // ← Callback для перерисовки!
+                dialog.Settings);
 
             if (dialog.OpenAfterExport)
             {
@@ -2288,13 +2397,24 @@ public partial class GanttChartControl : UserControl
         }
     }
 
+
     /// <summary>
     /// Печатает диаграмму через системный диалог.
     /// </summary>
     public bool Print(string? documentName = null)
     {
         var printService = new GanttPrintService();
-        return printService.Print(ChartCanvas, HeaderCanvas, documentName ?? "Диаграмма Ганта");
+
+        var fullWidth = GetFullChartWidth();
+        var fullHeight = GetFullChartHeight();
+
+        return printService.Print(
+            TaskLayer, 
+            HeaderCanvas, 
+            fullWidth, 
+            fullHeight,
+            documentName ?? "Диаграмма Ганта",
+            InvalidateChart);  // ← Callback для перерисовки!
     }
 
     #endregion
