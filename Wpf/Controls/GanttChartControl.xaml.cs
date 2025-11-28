@@ -1204,11 +1204,11 @@ public partial class GanttChartControl : UserControl
         }
 
         // Split-части — нельзя тянуть
-        var isSplitPart = task.IsPart;
-        if (isSplitPart)
-        {
-            return DragOperation.None;
-        }
+        // var isSplitPart = task.IsPart;
+        // if (isSplitPart)
+        // {
+        //     return DragOperation.None;
+        // }
 
         // Обычные задачи
         const double resizeZone = 8.0;
@@ -1274,13 +1274,13 @@ public partial class GanttChartControl : UserControl
         }
 
         var isGroup = ProjectManager?.IsGroup(task) ?? false;
-        var isSplitPart = task.IsPart;
-
-        if (isSplitPart)
-        {
-            Cursor = Cursors.No;
-            return;
-        }
+        // var isSplitPart = task.IsPart;
+        //
+        // if (isSplitPart)
+        // {
+        //     Cursor = Cursors.No;
+        //     return;
+        // }
 
         var columnWidth = ColumnWidth;
         var taskX = task.Start.Days * columnWidth;

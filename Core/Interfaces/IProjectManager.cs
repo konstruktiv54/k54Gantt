@@ -82,7 +82,7 @@ public class Task
     /// Флаг развёрнутости заметки в UI (не сериализуется).
     /// </summary>
     [System.Text.Json.Serialization.JsonIgnore]
-    [Newtonsoft.Json.JsonIgnore]
+    [JsonIgnore]
     public bool IsNoteExpanded { get; set; }
 
     /// <summary>
