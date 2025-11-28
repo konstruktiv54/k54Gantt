@@ -6,6 +6,8 @@ using System.Windows.Shapes;
 using System.Windows.Media.Effects;
 using Core.Services;
 using Wpf.Rendering;
+using Wpf.Services;
+using Wpf.Views;
 using Task = Core.Interfaces.Task;
 
 
@@ -724,7 +726,7 @@ public partial class GanttChartControl : UserControl
     #endregion
 
     #region Public Methods
-
+    
     /// <summary>
     /// Перерисовывает всю диаграмму.
     /// </summary>
@@ -1340,6 +1342,9 @@ public partial class GanttChartControl : UserControl
     /// <summary>
     /// Определяет тип операции по позиции клика.
     /// </summary>
+    /// <summary>
+    /// Определяет тип операции по позиции клика и модификаторам.
+    /// </summary>
     private DragOperation DetermineOperation(Task task, Point clickPosition, int rowIndex)
     {
         var columnWidth = ColumnWidth;
@@ -1347,12 +1352,28 @@ public partial class GanttChartControl : UserControl
         var barSpacing = BarSpacing;
         var rowHeight = RowHeight;
 
+        // Границы бара задачи
         var taskX = task.Start.Days * columnWidth;
         var taskY = rowIndex * rowHeight + barSpacing / 2;
         var taskWidth = Math.Max(task.Duration.Days * columnWidth, columnWidth * 0.5);
         var taskEndX = taskX + taskWidth;
 
-        // Проверка дедлайна
+        // ═══════════════════════════════════════════════════════════════════
+        // ПРОВЕРКА 0: Shift зажат = Reordering (изменение порядка)
+        // ═══════════════════════════════════════════════════════════════════
+        if (Keyboard.Modifiers == ModifierKeys.Shift)
+        {
+            // Проверяем, что клик в пределах бара
+            if (clickPosition.X >= taskX && clickPosition.X <= taskEndX &&
+                clickPosition.Y >= taskY && clickPosition.Y <= taskY + barHeight)
+            {
+                return DragOperation.Reordering;
+            }
+        }
+
+        // ═══════════════════════════════════════════════════════════════════
+        // ПРОВЕРКА 1: Клик на дедлайн?
+        // ═══════════════════════════════════════════════════════════════════
         if (task.Deadline.HasValue)
         {
             var deadlineX = task.Deadline.Value.Days * columnWidth;
@@ -1365,7 +1386,11 @@ public partial class GanttChartControl : UserControl
             }
         }
 
-        // Группы — только перемещение
+        // ═══════════════════════════════════════════════════════════════════
+        // ПРОВЕРКА 2: Клик на задачу?
+        // ═══════════════════════════════════════════════════════════════════
+        
+        // Группы — только перемещение (в центре бара)
         var isGroup = ProjectManager?.IsGroup(task) ?? false;
         if (isGroup)
         {
@@ -1376,35 +1401,29 @@ public partial class GanttChartControl : UserControl
             }
             return DragOperation.None;
         }
-
-        // Split-части — нельзя тянуть
-        // var isSplitPart = task.IsPart;
-        // if (isSplitPart)
-        // {
-        //     return DragOperation.None;
-        // }
-
-        // Обычные задачи
+        
+        // Обычные задачи — проверяем зоны
         const double resizeZone = 8.0;
 
+        // Проверяем Y координату (в пределах бара)
         if (clickPosition.Y < taskY || clickPosition.Y > taskY + barHeight)
         {
             return DragOperation.None;
         }
 
-        // Левый край
+        // Левый край — resize start
         if (clickPosition.X >= taskX - resizeZone && clickPosition.X <= taskX + resizeZone)
         {
             return DragOperation.ResizingStart;
         }
 
-        // Правый край
+        // Правый край — resize end
         if (clickPosition.X >= taskEndX - resizeZone && clickPosition.X <= taskEndX + resizeZone)
         {
             return DragOperation.ResizingEnd;
         }
 
-        // Центр
+        // Центр — перемещение
         if (clickPosition.X > taskX + resizeZone && clickPosition.X < taskEndX - resizeZone)
         {
             return DragOperation.Moving;
@@ -1413,6 +1432,9 @@ public partial class GanttChartControl : UserControl
         return DragOperation.None;
     }
 
+    /// <summary>
+    /// Обновляет курсор при наведении на задачу.
+    /// </summary>
     /// <summary>
     /// Обновляет курсор при наведении на задачу.
     /// </summary>
@@ -1432,6 +1454,24 @@ public partial class GanttChartControl : UserControl
         var task = hitResult.Task;
         var rowIndex = hitResult.RowIndex;
 
+        // ═══════════════════════════════════════════════════════════════════
+        // Shift зажат = показываем курсор перемещения вверх/вниз
+        // ═══════════════════════════════════════════════════════════════════
+        if (Keyboard.Modifiers == ModifierKeys.Shift)
+        {
+            var taskX = task.Start.Days * ColumnWidth;
+            var taskWidth = Math.Max(task.Duration.Days * ColumnWidth, ColumnWidth * 0.5);
+            var taskEndX = taskX + taskWidth;
+            var taskY = rowIndex * RowHeight + BarSpacing / 2;
+
+            if (position.X >= taskX && position.X <= taskEndX &&
+                position.Y >= taskY && position.Y <= taskY + BarHeight)
+            {
+                Cursor = Cursors.SizeNS;  // Вертикальное перемещение
+                return;
+            }
+        }
+
         // Проверяем дедлайн
         if (task.Deadline.HasValue)
         {
@@ -1448,24 +1488,18 @@ public partial class GanttChartControl : UserControl
         }
 
         var isGroup = ProjectManager?.IsGroup(task) ?? false;
-        // var isSplitPart = task.IsPart;
-        //
-        // if (isSplitPart)
-        // {
-        //     Cursor = Cursors.No;
-        //     return;
-        // }
+
 
         var columnWidth = ColumnWidth;
-        var taskX = task.Start.Days * columnWidth;
-        var taskWidth = Math.Max(task.Duration.Days * columnWidth, columnWidth * 0.5);
-        var taskEndX = taskX + taskWidth;
+        var taskX2 = task.Start.Days * columnWidth;
+        var taskWidth2 = Math.Max(task.Duration.Days * columnWidth, columnWidth * 0.5);
+        var taskEndX2 = taskX2 + taskWidth2;
 
         const double resizeZone = 8.0;
 
         if (isGroup)
         {
-            if (position.X >= taskX && position.X <= taskEndX)
+            if (position.X >= taskX2 && position.X <= taskEndX2)
             {
                 Cursor = Cursors.SizeAll;
             }
@@ -1477,17 +1511,17 @@ public partial class GanttChartControl : UserControl
         }
 
         // Левый край
-        if (position.X >= taskX - resizeZone && position.X <= taskX + resizeZone)
+        if (position.X >= taskX2 - resizeZone && position.X <= taskX2 + resizeZone)
         {
             Cursor = Cursors.SizeWE;
         }
         // Правый край
-        else if (position.X >= taskEndX - resizeZone && position.X <= taskEndX + resizeZone)
+        else if (position.X >= taskEndX2 - resizeZone && position.X <= taskEndX2 + resizeZone)
         {
             Cursor = Cursors.SizeWE;
         }
         // Центр
-        else if (position.X > taskX + resizeZone && position.X < taskEndX - resizeZone)
+        else if (position.X > taskX2 + resizeZone && position.X < taskEndX2 - resizeZone)
         {
             Cursor = Cursors.SizeAll;
         }
@@ -1496,8 +1530,7 @@ public partial class GanttChartControl : UserControl
             Cursor = Cursors.Arrow;
         }
     }
-
-
+    
     /// <summary>
     /// Начинает операцию перетаскивания.
     /// </summary>
@@ -1518,6 +1551,7 @@ public partial class GanttChartControl : UserControl
 
         Mouse.Capture(this);
 
+        // Устанавливаем курсор в зависимости от операции
         switch (operation)
         {
             case DragOperation.Moving:
@@ -1531,8 +1565,12 @@ public partial class GanttChartControl : UserControl
             case DragOperation.ProgressAdjusting:
                 Cursor = Cursors.SizeWE;
                 break;
+            case DragOperation.Reordering:       // ← ДОБАВЛЕНО
+                Cursor = Cursors.SizeNS;
+                break;
         }
 
+        // Сохраняем позиции дочерних задач для групп
         if (operation == DragOperation.Moving && ProjectManager != null && ProjectManager.IsGroup(task))
         {
             _originalChildPositions = new Dictionary<Guid, (TimeSpan Start, TimeSpan Duration)>();
@@ -1542,6 +1580,7 @@ public partial class GanttChartControl : UserControl
             }
         }
     }
+
 
     /// <summary>
     /// Обновляет preview во время перетаскивания.
@@ -1568,7 +1607,7 @@ public partial class GanttChartControl : UserControl
                 UpdateResizingEndPreview(deltaX);
                 break;
 
-            case DragOperation.Reordering:
+            case DragOperation.Reordering:       // ← ДОБАВЛЕНО
                 UpdateReorderingPreview(deltaY);
                 break;
         }
@@ -2170,6 +2209,92 @@ public partial class GanttChartControl : UserControl
 
         // Возвращаем фокус в TextBox
         _noteTextBox?.Focus();
+    }
+
+    #endregion
+    
+        #region PDF Export
+
+    /// <summary>
+    /// Экспортирует диаграмму в PDF с диалогом настроек.
+    /// </summary>
+    public bool ExportToPdf(string? projectName = null)
+    {
+        var name = projectName ?? "Диаграмма Ганта";
+        
+        var settings = new PdfExportSettings
+        {
+            ProjectName = name,
+            ExportDate = DateTime.Now,
+            Dpi = 150,
+            Scale = 1.0,
+            Orientation = PageOrientation.Landscape
+        };
+
+        var exportService = new GanttPdfExportService();
+        
+        // ChartCanvas и HeaderCanvas — это элементы внутри GanttChartControl
+        // Они доступны здесь напрямую
+        return exportService.ExportToPdf(ChartCanvas, HeaderCanvas, settings);
+    }
+
+    /// <summary>
+    /// Экспортирует диаграмму в PDF с диалогом настроек.
+    /// </summary>
+    public bool ExportToPdfWithDialog(string? defaultProjectName = null)
+    {
+        var dialog = new PdfExportDialog(defaultProjectName ?? "Диаграмма Ганта")
+        {
+            Owner = Window.GetWindow(this)  // this = GanttChartControl (DependencyObject)
+        };
+
+        if (dialog.ShowDialog() != true || dialog.Settings == null)
+            return false;
+
+        var saveDialog = new Microsoft.Win32.SaveFileDialog
+        {
+            Filter = "PDF документ (*.pdf)|*.pdf",
+            DefaultExt = ".pdf",
+            FileName = $"{dialog.Settings.ProjectName}_{DateTime.Now:yyyy-MM-dd}"
+        };
+
+        if (saveDialog.ShowDialog() != true)
+            return false;
+
+        try
+        {
+            var exportService = new GanttPdfExportService();
+            exportService.ExportToPdfFile(ChartCanvas, HeaderCanvas, saveDialog.FileName, dialog.Settings);
+
+            if (dialog.OpenAfterExport)
+            {
+                System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+                {
+                    FileName = saveDialog.FileName,
+                    UseShellExecute = true
+                });
+            }
+
+            return true;
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show(
+                $"Ошибка при экспорте:\n{ex.Message}",
+                "Ошибка",
+                MessageBoxButton.OK,
+                MessageBoxImage.Error);
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// Печатает диаграмму через системный диалог.
+    /// </summary>
+    public bool Print(string? documentName = null)
+    {
+        var printService = new GanttPrintService();
+        return printService.Print(ChartCanvas, HeaderCanvas, documentName ?? "Диаграмма Ганта");
     }
 
     #endregion

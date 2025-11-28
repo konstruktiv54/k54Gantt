@@ -113,6 +113,12 @@ public partial class MainWindow : Window
     private void OnLoaded(object sender, RoutedEventArgs e)
     {
         ViewModel?.LoadLastOpenedFile();
+        if (DataContext is MainViewModel vm)
+        {
+            // Связываем callbacks
+            vm.ExportToPdfAction = GanttChart.ExportToPdfWithDialog;
+            vm.PrintAction = GanttChart.Print;
+        }
     }
     
     public void RefreshChart()

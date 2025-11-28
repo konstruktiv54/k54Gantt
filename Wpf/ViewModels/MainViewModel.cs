@@ -23,6 +23,9 @@ public partial class MainViewModel : ObservableObject
 
     private readonly FileService _fileService;
     private readonly ResourceService _resourceService;
+    
+    public Func<string?, bool>? ExportToPdfAction { get; set; }
+    public Func<string?, bool>? PrintAction { get; set; }
 
     #endregion
 
@@ -37,6 +40,9 @@ public partial class MainViewModel : ObservableObject
 
     #region Observable Properties
 
+    [ObservableProperty]
+    private string _projectName = "Новый проект";
+    
     /// <summary>
     /// Менеджер проекта (содержит все задачи).
     /// </summary>
@@ -543,6 +549,24 @@ public partial class MainViewModel : ObservableObject
 
     #endregion
 
+
+    #region Print Commands
+
+    [RelayCommand]
+    private void ExportToPdf()
+    {
+        ExportToPdfAction?.Invoke(ProjectName);
+    }
+
+    [RelayCommand]
+    private void Print()
+    {
+        PrintAction?.Invoke(ProjectName);
+    }
+
+    #endregion
+
+
     #region Task Commands
 
     /// <summary>
@@ -845,7 +869,7 @@ public partial class MainViewModel : ObservableObject
     #endregion
 
     #region Public Methods
-
+    
     /// <summary>
     /// Обрабатывает завершение drag-операции.
     /// Синхронизирует sidebar и помечает проект как изменённый.

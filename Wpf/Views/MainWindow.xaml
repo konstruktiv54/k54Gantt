@@ -8,6 +8,7 @@
         xmlns:viewModels="clr-namespace:Wpf.ViewModels"
         xmlns:icon="clr-namespace:Material.Icons.WPF;assembly=Material.Icons.WPF"
         xmlns:converters="clr-namespace:Wpf.Converters"
+        xmlns:materialDesign="http://materialdesigninxaml.net/winfx/xaml/themes"
         mc:Ignorable="d"
         Title="{Binding WindowTitle}"
         Height="700" 
@@ -165,6 +166,14 @@
                 <MenuItem Header="Назначить на задачу..." 
                           Command="{Binding AssignResourcesCommand}"
                           InputGestureText="Ctrl+Shift+R"/>
+            </MenuItem>
+            
+            <!-- Печать -->
+            <MenuItem Header="Экспорт в PDF" Command="{Binding ExportToPdfCommand}" 
+                      InputGestureText="Ctrl+P">
+                <MenuItem.Icon>
+                    <materialDesign:PackIcon Kind="FilePdfBox"/>
+                </MenuItem.Icon>
             </MenuItem>
 
             <!-- Help -->
