@@ -1,6 +1,7 @@
 // GanttChart.WPF/Rendering/TaskRenderer.cs
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Shapes;
 using Core.Services;
@@ -511,52 +512,75 @@ public class TaskRenderer
     /// <summary>
     /// Отрисовывает заметку справа от названия задачи.
     /// </summary>
+    /// <summary>
+    /// Отрисовывает заметку справа от названия задачи (свёрнутая версия).
+    /// </summary>
     private void RenderTaskNote(Canvas canvas, Task task, double x, double y, double width, double barHeight)
     {
         if (string.IsNullOrWhiteSpace(task.Note)) return;
 
-        // Позиция после имени задачи (примерная)
+        // Позиция после имени задачи
         var nameWidth = EstimateTextWidth(task.Name ?? "Без названия", 11);
-        var noteX = x + width + 8 + nameWidth + 12; // 8 = отступ от бара, 12 = отступ от имени
+        var noteX = x + width + 8 + nameWidth + 15;
+        var noteY = y + (barHeight - 16) / 2;
 
-        var noteY = y + (barHeight - 12) / 2;
-
-        // Разделитель
-        var separator = new TextBlock
+        // Контейнер для заметки (кликабельная область)
+        var noteContainer = new Border
         {
-            Text = "│",
-            FontSize = 10,
-            Foreground = new SolidColorBrush(Color.FromRgb(200, 200, 200))
+            Background = new SolidColorBrush(Color.FromArgb(40, 255, 200, 100)), // Полупрозрачный жёлтый
+            BorderBrush = new SolidColorBrush(Color.FromRgb(200, 180, 100)),
+            BorderThickness = new Thickness(1),
+            CornerRadius = new CornerRadius(3),
+            Padding = new Thickness(4, 2, 4, 2),
+            Cursor = Cursors.Hand,
+            ToolTip = "Нажмите для редактирования"
         };
-        Canvas.SetLeft(separator, noteX - 8);
-        Canvas.SetTop(separator, noteY);
-        canvas.Children.Add(separator);
 
-        // Текст заметки (обрезаем если длинный)
-        var noteText = task.Note;
-        var maxNoteLength = 50;
-        
-        if (noteText.Length > maxNoteLength)
+        // Контент: иконка + текст
+        var contentPanel = new StackPanel
         {
-            noteText = noteText.Substring(0, maxNoteLength - 3) + "...";
-        }
+            Orientation = Orientation.Horizontal
+        };
 
-        // Заменяем переносы строк на пробелы для однострочного отображения
-        noteText = noteText.Replace("\r\n", " ").Replace("\n", " ").Replace("\r", " ");
+        // Иконка заметки
+        var noteIcon = new TextBlock
+        {
+            Text = "📝",
+            FontSize = 10,
+            Margin = new Thickness(0, 0, 4, 0),
+            VerticalAlignment = VerticalAlignment.Center
+        };
+        contentPanel.Children.Add(noteIcon);
+
+        // Текст заметки (обрезанный)
+        var noteText = task.Note
+            .Replace("\r\n", " ")
+            .Replace("\n", " ")
+            .Replace("\r", " ")
+            .Trim();
+
+        if (noteText.Length > 30)
+        {
+            noteText = noteText.Substring(0, 27) + "...";
+        }
 
         var noteTextBlock = new TextBlock
         {
             Text = noteText,
             FontSize = 10,
             FontStyle = FontStyles.Italic,
-            Foreground = _noteBrush,
-            MaxWidth = 300,
-            TextTrimming = TextTrimming.CharacterEllipsis
+            Foreground = new SolidColorBrush(Color.FromRgb(100, 80, 40)),
+            MaxWidth = 150,
+            TextTrimming = TextTrimming.CharacterEllipsis,
+            VerticalAlignment = VerticalAlignment.Center
         };
+        contentPanel.Children.Add(noteTextBlock);
 
-        Canvas.SetLeft(noteTextBlock, noteX);
-        Canvas.SetTop(noteTextBlock, noteY);
-        canvas.Children.Add(noteTextBlock);
+        noteContainer.Child = contentPanel;
+
+        Canvas.SetLeft(noteContainer, noteX);
+        Canvas.SetTop(noteContainer, noteY);
+        canvas.Children.Add(noteContainer);
     }
     
     /// <summary>
@@ -564,7 +588,6 @@ public class TaskRenderer
     /// </summary>
     private double EstimateTextWidth(string text, double fontSize)
     {
-        // Примерная оценка: fontSize * 0.6 на символ
         return Math.Min(text.Length * fontSize * 0.55, 200);
     }
 }

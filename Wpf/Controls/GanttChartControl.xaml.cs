@@ -3,9 +3,11 @@ using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Shapes;
+using System.Windows.Media.Effects;
 using Core.Services;
 using Wpf.Rendering;
 using Task = Core.Interfaces.Task;
+
 
 namespace Wpf.Controls;
 
@@ -31,6 +33,23 @@ public partial class GanttChartControl : UserControl
     private const double DeadlineGrabZone = 8.0;
     private const int DefaultDeadlineOffsetDays = 5;
     private Dictionary<Guid, (TimeSpan Start, TimeSpan Duration)>? _originalChildPositions;
+    
+    // Развёрнутая заметка
+    private Task? _expandedNoteTask;
+    private TextBox? _noteTextBox;
+    private Border? _notePopup;
+    private Grid? _noteContainer; 
+    private const double NotePopupMinWidth = 200;
+    private const double NotePopupMinHeight = 80;
+    private const double NotePopupDefaultWidth = 500;
+    private const double NotePopupDefaultHeight = 300;
+    
+    // Resize состояние
+    private bool _isResizingNote;
+    private Point _noteResizeStart;
+    private Size _noteOriginalSize;
+    private bool _resizingRight;
+    private bool _resizingBottom;
     
     #endregion
 
@@ -368,10 +387,70 @@ public partial class GanttChartControl : UserControl
     /// <summary>
     /// Обработчик нажатия левой кнопки мыши.
     /// </summary>
+    /// <summary>
+    /// Обработчик нажатия левой кнопки мыши.
+    /// </summary>
     private void OnPreviewMouseLeftButtonDown(object sender, MouseButtonEventArgs e)
     {
         Focus();
         var position = e.GetPosition(TaskLayer);
+
+        // ═══════════════════════════════════════════════════════════════════
+        // ПРОВЕРКА 0: Клик внутри развёрнутой заметки?
+        // ═══════════════════════════════════════════════════════════════════
+        if (_noteContainer != null && _expandedNoteTask != null)
+        {
+            var posInContainer = e.GetPosition(_noteContainer);
+            
+            // Проверяем, внутри ли контейнера
+            if (posInContainer.X >= 0 && posInContainer.X <= _noteContainer.ActualWidth &&
+                posInContainer.Y >= 0 && posInContainer.Y <= _noteContainer.ActualHeight)
+            {
+                // Проверяем resize зоны (8 пикселей от края)
+                const double resizeZone = 8;
+                var atRight = posInContainer.X >= _noteContainer.ActualWidth - resizeZone;
+                var atBottom = posInContainer.Y >= _noteContainer.ActualHeight - resizeZone;
+
+                if (atRight || atBottom)
+                {
+                    // Начинаем resize
+                    StartNoteResize(e.GetPosition(OverlayLayer), atRight, atBottom);
+                    e.Handled = true;
+                    return;
+                }
+
+                // Клик внутри popup — не обрабатываем, пусть TextBox работает
+                return;
+            }
+        }
+
+        // ═══════════════════════════════════════════════════════════════════
+        // ПРОВЕРКА 1: Клик по свёрнутой заметке?
+        // ═══════════════════════════════════════════════════════════════════
+        var noteHit = HitTestNote(position);
+        if (noteHit.Task != null)
+        {
+            if (_expandedNoteTask == noteHit.Task)
+            {
+                e.Handled = true;
+                return;
+            }
+            
+            HideExpandedNote(save: true);
+            ShowExpandedNote(noteHit.Task, noteHit.NoteRect);
+            e.Handled = true;
+            return;
+        }
+        
+        // Клик вне заметки — скрываем развёрнутую (если есть)
+        if (_expandedNoteTask != null)
+        {
+            HideExpandedNote(save: true);
+        }
+
+        // ═══════════════════════════════════════════════════════════════════
+        // ПРОВЕРКА 2: Клик по задаче?
+        // ═══════════════════════════════════════════════════════════════════
         var hitResult = HitTestTaskWithIndex(position);
 
         if (hitResult.Task != null)
@@ -391,7 +470,6 @@ public partial class GanttChartControl : UserControl
                 return;
             }
 
-            // Определяем тип операции
             var operation = DetermineOperation(hitResult.Task, position, hitResult.RowIndex);
 
             if (operation != DragOperation.None)
@@ -415,6 +493,15 @@ public partial class GanttChartControl : UserControl
     /// </summary>
     private void OnPreviewMouseLeftButtonUp(object sender, MouseButtonEventArgs e)
     {
+        // Завершение resize заметки
+        if (_isResizingNote)
+        {
+            CompleteNoteResize();
+            e.Handled = true;
+            return;
+        }
+
+        // Остальная логика...
         if (_dragState == null || !_dragState.IsActive) return;
         
         var position = e.GetPosition(TaskLayer);
@@ -426,6 +513,41 @@ public partial class GanttChartControl : UserControl
     {
         var position = e.GetPosition(TaskLayer);
 
+        // ═══════════════════════════════════════════════════════════════════
+        // ПРОВЕРКА 0: Resize заметки?
+        // ═══════════════════════════════════════════════════════════════════
+        if (_isResizingNote && _noteContainer != null)
+        {
+            UpdateNoteResize(e.GetPosition(OverlayLayer));
+            return;
+        }
+
+        // Обновляем курсор для resize зон заметки
+        if (_noteContainer != null && _expandedNoteTask != null)
+        {
+            var posInContainer = e.GetPosition(_noteContainer);
+            
+            if (posInContainer.X >= 0 && posInContainer.X <= _noteContainer.ActualWidth &&
+                posInContainer.Y >= 0 && posInContainer.Y <= _noteContainer.ActualHeight)
+            {
+                const double resizeZone = 8;
+                var atRight = posInContainer.X >= _noteContainer.ActualWidth - resizeZone;
+                var atBottom = posInContainer.Y >= _noteContainer.ActualHeight - resizeZone;
+
+                if (atRight && atBottom)
+                    Cursor = Cursors.SizeNWSE;
+                else if (atRight)
+                    Cursor = Cursors.SizeWE;
+                else if (atBottom)
+                    Cursor = Cursors.SizeNS;
+                else
+                    Cursor = Cursors.IBeam; // Внутри TextBox
+
+                return;
+            }
+        }
+
+        // Остальная логика drag & drop...
         if (_dragState != null && _dragState.IsActive)
         {
             switch (_dragState.Operation)
@@ -467,19 +589,30 @@ public partial class GanttChartControl : UserControl
     /// <summary>
     /// Обрабатывает нажатия клавиш.
     /// </summary>
+    /// <summary>
+    /// Обрабатывает нажатия клавиш.
+    /// </summary>
+    /// <summary>
+    /// Обрабатывает нажатия клавиш.
+    /// </summary>
     private void OnKeyDown(object sender, KeyEventArgs e)
     {
-        if (SelectedTask == null) return;
+        // Если фокус в TextBox заметки — не обрабатываем (TextBox сам обработает)
+        if (_noteTextBox != null && _noteTextBox.IsFocused)
+            return;
 
         switch (e.Key)
         {
             case Key.D:
-                ToggleDeadline(SelectedTask);
-                e.Handled = true;
+                if (SelectedTask != null)
+                {
+                    ToggleDeadline(SelectedTask);
+                    e.Handled = true;
+                }
                 break;
 
             case Key.Delete:
-                if (IsDeadlineSelected(SelectedTask))
+                if (SelectedTask != null && IsDeadlineSelected(SelectedTask))
                 {
                     RemoveDeadline(SelectedTask);
                     e.Handled = true;
@@ -487,9 +620,27 @@ public partial class GanttChartControl : UserControl
                 break;
 
             case Key.Escape:
+                // Сначала проверяем развёрнутую заметку
+                if (_expandedNoteTask != null)
+                {
+                    HideExpandedNote(save: false);
+                    e.Handled = true;
+                    return;
+                }
+                
+                // Затем проверяем drag
                 if (_dragState != null && _dragState.IsActive)
                 {
                     CancelDrag();
+                    e.Handled = true;
+                }
+                break;
+                
+            case Key.N:
+                // N — открыть/создать заметку для выбранной задачи
+                if (SelectedTask != null && Keyboard.Modifiers == ModifierKeys.None)
+                {
+                    OpenNoteForSelectedTask();
                     e.Handled = true;
                 }
                 break;
@@ -810,7 +961,7 @@ public partial class GanttChartControl : UserControl
     #endregion
 
     #region Private Methods - Hit Testing
-
+    
     /// <summary>
     /// Hit-test задачи (возвращает только Task).
     /// </summary>
@@ -908,6 +1059,29 @@ public partial class GanttChartControl : UserControl
     #endregion
     
     #region Private Methods - Drag & Drop
+    
+    /// <summary>
+    /// Открывает редактор заметки для выбранной задачи.
+    /// </summary>
+    private void OpenNoteForSelectedTask()
+    {
+        if (SelectedTask == null) return;
+
+        var visibleTasks = GetVisibleTasks();
+        var index = visibleTasks.IndexOf(SelectedTask);
+        if (index < 0) return;
+
+        var taskX = SelectedTask.Start.Days * ColumnWidth;
+        var taskWidth = Math.Max(SelectedTask.Duration.Days * ColumnWidth, ColumnWidth);
+        var taskY = index * RowHeight + BarSpacing / 2;
+        var nameWidth = EstimateTextWidth(SelectedTask.Name ?? "", 12);
+        var noteX = taskX + taskWidth + 8 + nameWidth + 8;
+        
+        var noteRect = new Rect(noteX, taskY, 150, BarHeight);
+        
+        HideExpandedNote(save: true);
+        ShowExpandedNote(SelectedTask, noteRect);
+    }
     
     /// <summary>
     /// Добавляет или убирает дедлайн для задачи.
@@ -1722,6 +1896,280 @@ public partial class GanttChartControl : UserControl
         OverlayLayer.Children.Clear();
         RenderOverlay();
         Render();
+    }
+
+    #endregion
+    
+    #region Note Editing
+
+    /// <summary>
+    /// Hit-test для области заметки.
+    /// </summary>
+    private (Task? Task, Rect NoteRect) HitTestNote(Point position)
+    {
+        if (ProjectManager == null)
+            return (null, Rect.Empty);
+
+        var visibleTasks = GetVisibleTasks();
+        var rowIndex = (int)(position.Y / RowHeight);
+
+        if (rowIndex < 0 || rowIndex >= visibleTasks.Count)
+            return (null, Rect.Empty);
+
+        var task = visibleTasks[rowIndex];
+
+        if (string.IsNullOrWhiteSpace(task.Note))
+            return (null, Rect.Empty);
+
+        // Вычисляем позицию заметки
+        var taskX = task.Start.Days * ColumnWidth;
+        var taskWidth = Math.Max(task.Duration.Days * ColumnWidth, ColumnWidth);
+        var taskY = rowIndex * RowHeight + BarSpacing / 2;
+
+        var nameWidth = EstimateTextWidth(task.Name ?? "", 12);
+        
+        var noteX = taskX + taskWidth + 8 + nameWidth + 12;
+        var noteY = taskY;
+        var noteWidth = 150.0;
+        var noteHeight = BarHeight;
+
+        var noteRect = new Rect(noteX, noteY, noteWidth, noteHeight);
+
+        if (noteRect.Contains(position))
+        {
+            return (task, noteRect);
+        }
+
+        return (null, Rect.Empty);
+    }
+
+    /// <summary>
+    /// Оценивает ширину текста.
+    /// </summary>
+    private double EstimateTextWidth(string text, double fontSize)
+    {
+        return Math.Min(text.Length * fontSize * 0.55, 200);
+    }
+
+    /// <summary>
+    /// Показывает развёрнутую редактируемую заметку.
+    /// </summary>
+    private void ShowExpandedNote(Task task, Rect anchorRect)
+    {
+        _expandedNoteTask = task;
+
+        // Создаём TextBox для редактирования
+        _noteTextBox = new TextBox
+        {
+            Text = task.Note ?? "",
+            TextWrapping = TextWrapping.Wrap,
+            AcceptsReturn = true,
+            AcceptsTab = false,
+            FontSize = 11,
+            Padding = new Thickness(4),
+            BorderThickness = new Thickness(0),
+            Background = Brushes.Transparent,
+            VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+            HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled
+        };
+
+        _noteTextBox.KeyDown += OnNoteTextBoxKeyDown;
+
+        // Popup контейнер
+        _notePopup = new Border
+        {
+            Background = new SolidColorBrush(Color.FromRgb(255, 255, 240)),
+            BorderBrush = new SolidColorBrush(Color.FromRgb(180, 160, 100)),
+            BorderThickness = new Thickness(1),
+            CornerRadius = new CornerRadius(4),
+            Padding = new Thickness(8),
+            Child = _noteTextBox
+        };
+
+        // Resize grip (визуальный индикатор в правом нижнем углу)
+        var resizeGrip = new Path
+        {
+            Data = Geometry.Parse("M 0,8 L 8,0 M 3,8 L 8,3 M 6,8 L 8,6"),
+            Stroke = new SolidColorBrush(Color.FromRgb(160, 140, 80)),
+            StrokeThickness = 1,
+            Width = 10,
+            Height = 10,
+            HorizontalAlignment = HorizontalAlignment.Right,
+            VerticalAlignment = VerticalAlignment.Bottom,
+            Margin = new Thickness(0, 0, 2, 2),
+            IsHitTestVisible = false
+        };
+
+        // Grid контейнер
+        _noteContainer = new Grid
+        {
+            Width = NotePopupDefaultWidth,
+            Height = NotePopupDefaultHeight,
+            Effect = new System.Windows.Media.Effects.DropShadowEffect
+            {
+                Color = Colors.Black,
+                Opacity = 0.3,
+                BlurRadius = 10,
+                ShadowDepth = 3
+            }
+        };
+
+        _noteContainer.Children.Add(_notePopup);
+        _noteContainer.Children.Add(resizeGrip);
+
+        // Позиционируем
+        var popupX = anchorRect.X;
+        var popupY = anchorRect.Y;
+
+        // Проверяем границы
+        if (popupX + NotePopupDefaultWidth > TaskLayer.ActualWidth)
+        {
+            popupX = Math.Max(10, TaskLayer.ActualWidth - NotePopupDefaultWidth - 10);
+        }
+
+        if (popupY + NotePopupDefaultHeight > TaskLayer.ActualHeight)
+        {
+            popupY = Math.Max(10, anchorRect.Y - NotePopupDefaultHeight);
+        }
+
+        Canvas.SetLeft(_noteContainer, popupX);
+        Canvas.SetTop(_noteContainer, popupY);
+        Panel.SetZIndex(_noteContainer, 1000);
+
+        OverlayLayer.Children.Add(_noteContainer);
+
+        // Фокус
+        _noteTextBox.Focus();
+        _noteTextBox.CaretIndex = _noteTextBox.Text.Length;
+    }
+
+    /// <summary>
+    /// Скрывает развёрнутую заметку.
+    /// </summary>
+    private void HideExpandedNote(bool save = true)
+    {
+        if (_expandedNoteTask == null)
+            return;
+
+        // Сохраняем изменения
+        if (save && _noteTextBox != null)
+        {
+            var newText = _noteTextBox.Text?.Trim();
+            if (newText != _expandedNoteTask.Note)
+            {
+                ProjectManager?.SetNote(_expandedNoteTask, string.IsNullOrEmpty(newText) ? null : newText);
+                
+                TaskModified?.Invoke(this, new TaskDragEventArgs
+                {
+                    Task = _expandedNoteTask,
+                    Operation = DragOperation.None
+                });
+            }
+        }
+
+        // Очищаем
+        if (_noteContainer != null)
+        {
+            OverlayLayer.Children.Remove(_noteContainer);
+        }
+
+        if (_noteTextBox != null)
+        {
+            _noteTextBox.KeyDown -= OnNoteTextBoxKeyDown;
+        }
+
+        _expandedNoteTask = null;
+        _noteTextBox = null;
+        _notePopup = null;
+        _noteContainer = null;
+        _isResizingNote = false;
+
+        Cursor = Cursors.Arrow;
+        InvalidateChart();
+    }
+
+    /// <summary>
+    /// Обработчик клавиш в TextBox заметки.
+    /// </summary>
+    private void OnNoteTextBoxKeyDown(object sender, KeyEventArgs e)
+    {
+        switch (e.Key)
+        {
+            case Key.Escape:
+                // Отмена — НЕ сохраняем
+                HideExpandedNote(save: false);
+                e.Handled = true;
+                break;
+
+            case Key.Enter:
+                // Ctrl+Enter — новая строка
+                // Enter — сохранить и закрыть
+                if (Keyboard.Modifiers != ModifierKeys.Control)
+                {
+                    HideExpandedNote(save: true);
+                    e.Handled = true;
+                }
+                break;
+        }
+    }
+
+    /// <summary>
+    /// Начинает resize заметки.
+    /// </summary>
+    private void StartNoteResize(Point startPoint, bool resizeRight, bool resizeBottom)
+    {
+        if (_noteContainer == null) return;
+
+        _isResizingNote = true;
+        _noteResizeStart = startPoint;
+        _noteOriginalSize = new Size(_noteContainer.Width, _noteContainer.Height);
+        _resizingRight = resizeRight;
+        _resizingBottom = resizeBottom;
+
+        Mouse.Capture(this);
+
+        if (resizeRight && resizeBottom)
+            Cursor = Cursors.SizeNWSE;
+        else if (resizeRight)
+            Cursor = Cursors.SizeWE;
+        else
+            Cursor = Cursors.SizeNS;
+    }
+
+    /// <summary>
+    /// Обновляет размер заметки при resize.
+    /// </summary>
+    private void UpdateNoteResize(Point currentPoint)
+    {
+        if (_noteContainer == null || !_isResizingNote) return;
+
+        var deltaX = currentPoint.X - _noteResizeStart.X;
+        var deltaY = currentPoint.Y - _noteResizeStart.Y;
+
+        if (_resizingRight)
+        {
+            var newWidth = Math.Max(NotePopupMinWidth, _noteOriginalSize.Width + deltaX);
+            _noteContainer.Width = newWidth;
+        }
+
+        if (_resizingBottom)
+        {
+            var newHeight = Math.Max(NotePopupMinHeight, _noteOriginalSize.Height + deltaY);
+            _noteContainer.Height = newHeight;
+        }
+    }
+
+    /// <summary>
+    /// Завершает resize заметки.
+    /// </summary>
+    private void CompleteNoteResize()
+    {
+        _isResizingNote = false;
+        Mouse.Capture(null);
+        Cursor = Cursors.Arrow;
+
+        // Возвращаем фокус в TextBox
+        _noteTextBox?.Focus();
     }
 
     #endregion
