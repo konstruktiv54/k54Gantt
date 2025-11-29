@@ -13,13 +13,15 @@ namespace Wpf.Services;
 
 public static class XpsService
 {
-        /// <summary>
+    /// <summary>
     /// Сохраняет Header и Chart Canvas в XPS вектором.
     /// </summary>
     public static void SaveHeaderAndChartToXps_FixedPage(
         Canvas headerCanvas,
         Canvas chartCanvas,
-        Canvas? gridCanvas, // можно передать null, если не нужен GridRenderer
+        Canvas gridCanvas,
+        double chartStart,// можно передать null, если не нужен GridRenderer
+        double chartWidth,
         string xpsPath)
     {
         // 1. Рассчитываем размеры страницы
@@ -50,8 +52,8 @@ public static class XpsService
         fixedPage.Children.Add(gridClone);
         
         // 5. Размещаем chartCanvas под headerCanvas
-        var chartClone = CloneCanvasAsVisual(chartCanvas);
-        FixedPage.SetLeft(chartClone, 0);
+        var chartClone = CloneCanvasAsVisual(chartCanvas, chartWidth);
+        FixedPage.SetLeft(chartClone, chartStart);
         FixedPage.SetTop(chartClone, headerCanvas.ActualHeight);
         fixedPage.Children.Add(chartClone);
         
@@ -69,9 +71,10 @@ public static class XpsService
         }
     }
         
-    private static Canvas CloneCanvasAsVisual(Canvas source)
+    private static Canvas CloneCanvasAsVisual(Canvas source, double redWidth = 0)
     {
-        var width = source.ActualWidth;
+        var width = redWidth == 0 ? source.ActualWidth : redWidth;
+        
         var height = source.ActualHeight;
 
         var canvasCopy = new Canvas

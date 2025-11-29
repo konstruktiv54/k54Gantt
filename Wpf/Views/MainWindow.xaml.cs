@@ -116,7 +116,7 @@ public partial class MainWindow : Window
         if (DataContext is MainViewModel vm)
         {
             // Связываем callbacks
-            vm.ExportToPdfAction = GanttChart.ExportToPdfWithDialog;
+            vm.ExportToPdfAction = GanttChart.ExportToXpsWithDialog;
         }
     }
     

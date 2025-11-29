@@ -2220,7 +2220,21 @@ public partial class GanttChartControl : UserControl
     /// Вычисляет полную ширину рабочей области диаграммы.
     /// Основывается на РЕАЛЬНОМ содержимом (максимальная дата + буфер).
     /// </summary>
-    private double GetFullChartWidth()
+    private double GetChartStart()
+    {
+        if (ProjectManager == null)
+            return TaskLayer.Width > 0 ? TaskLayer.Width : TaskLayer.ActualWidth;
+
+        // Находим максимальную дату среди всех элементов
+        var minStart = ProjectManager.Tasks.Min(t => t.Start);
+
+ 
+        var calculatedWidth = minStart.TotalDays * ColumnWidth;
+
+        return calculatedWidth;
+    }
+    
+    private double GetChartEnd()
     {
         if (ProjectManager == null)
             return TaskLayer.Width > 0 ? TaskLayer.Width : TaskLayer.ActualWidth;
@@ -2239,17 +2253,9 @@ public partial class GanttChartControl : UserControl
             if (task.Deadline.HasValue && task.Deadline.Value > maxEnd)
                 maxEnd = task.Deadline.Value;
         }
+        var calculatedWidth = maxEnd.TotalDays * ColumnWidth;
 
-        // ═══════════════════════════════════════════════════════════════════
-        // Добавляем буфер справа (10% или минимум 5 дней для "воздуха")
-        // ═══════════════════════════════════════════════════════════════════
-        var bufferDays = Math.Max(maxEnd.TotalDays * 0.1, 5.0);
-        var totalDays = maxEnd.TotalDays + bufferDays;
-
-        var calculatedWidth = totalDays * ColumnWidth;
-        var canvasWidth = TaskLayer.Width > 0 ? TaskLayer.Width : TaskLayer.ActualWidth;
-
-        return Math.Max(calculatedWidth, canvasWidth);
+        return calculatedWidth;
     }
 
     /// <summary>
@@ -2282,21 +2288,15 @@ public partial class GanttChartControl : UserControl
     /// Экспортирует диаграмму в PDF с диалогом настроек.
     /// Экспортирует ВСЮ рабочую область, включая невидимую часть.
     /// </summary>
-    public bool ExportToPdfWithDialog(string? defaultProjectName = null)
+    public bool ExportToXpsWithDialog(string? defaultProjectName = null)
     {
-        var dialog = new PdfExportDialog(defaultProjectName ?? "Диаграмма Ганта")
-        {
-            Owner = Window.GetWindow(this)
-        };
-
-        if (dialog.ShowDialog() != true || dialog.Settings == null)
-            return false;
-
+        // Диалог сохранения файла
         var saveDialog = new Microsoft.Win32.SaveFileDialog
         {
-            Filter = "PDF документ (*.pdf)|*.pdf",
-            DefaultExt = ".pdf",
-            FileName = $"{dialog.Settings.ProjectName}_{DateTime.Now:yyyy-MM-dd}"
+            Filter = "XPS документ (*.xps)|*.xps",
+            DefaultExt = ".xps",
+            FileName = $"{defaultProjectName ?? "Диаграмма Ганта"}_{DateTime.Now:yyyy-MM-dd}",
+            Title = "Сохранить диаграмму как XPS"
         };
 
         if (saveDialog.ShowDialog() != true)
@@ -2304,25 +2304,32 @@ public partial class GanttChartControl : UserControl
 
         try
         {
-            var fullWidth = GetFullChartWidth();
-            var fullHeight = GetFullChartHeight();
+            // Получаем реальные размеры диаграммы 
+            var chartStart = GetChartStart();
+            var chartWidth = GetChartEnd()-GetChartStart();
 
-            var exportService = new GanttPdfExportService();
+            // Получаем ссылки на все необходимые Canvas
+            var gridCanvas = GridLayer; // Предполагая, что у вас есть доступ к GridLayer
+            var headerCanvas = HeaderCanvas;
+            var chartCanvas = TaskLayer;
 
-            // ═══════════════════════════════════════════════════════════════════
-            // КЛЮЧЕВОЕ: Передаём callback InvalidateChart
-            // ═══════════════════════════════════════════════════════════════════
-            exportService.ExportToPdfFile(
-                TaskLayer,
-                HeaderCanvas,
-                GridLayer,
-                fullWidth,
-                fullHeight,
-                saveDialog.FileName,
-                InvalidateChart,  // ← Callback для перерисовки!
-                dialog.Settings);
+            // Выполняем экспорт
+            ExportToXpsFile(
+                chartCanvas,
+                headerCanvas,
+                gridCanvas, 
+                chartStart,
+                chartWidth,
+                saveDialog.FileName);
 
-            if (dialog.OpenAfterExport)
+            // Опционально: открыть файл после сохранения
+            var result = MessageBox.Show(
+                "XPS документ успешно сохранён. Открыть файл?",
+                "Экспорт завершён",
+                MessageBoxButton.YesNo,
+                MessageBoxImage.Question);
+
+            if (result == MessageBoxResult.Yes)
             {
                 System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
                 {
@@ -2336,11 +2343,31 @@ public partial class GanttChartControl : UserControl
         catch (Exception ex)
         {
             MessageBox.Show(
-                $"Ошибка при экспорте:\n{ex.Message}",
+                $"Ошибка при экспорте в XPS:\n{ex.Message}",
                 "Ошибка",
                 MessageBoxButton.OK,
                 MessageBoxImage.Error);
             return false;
+        }
+    }
+
+    public void ExportToXpsFile(
+        Canvas chartCanvas, 
+        Canvas headerCanvas,
+        Canvas gridCanvas,double chartStart, double charWidth,
+        string filePath)
+    {
+        try
+        {
+            // ═══════════════════════════════════════════════════════════════════
+            // ПРОСТО ВЫЗЫВАЕМ XPS СЕРВИС - ВСЯ СЛОЖНАЯ ЛОГИКА НЕ НУЖНА!
+            // ═══════════════════════════════════════════════════════════════════
+            XpsService.SaveHeaderAndChartToXps_FixedPage(headerCanvas, chartCanvas, gridCanvas, chartStart, charWidth, filePath);
+        }
+        catch (Exception ex)
+        {
+            // Упрощенная обработка ошибок
+            throw new Exception($"Ошибка экспорта в XPS: {ex.Message}", ex);
         }
     }
 
