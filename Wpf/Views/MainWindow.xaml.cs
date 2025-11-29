@@ -117,7 +117,6 @@ public partial class MainWindow : Window
         {
             // Связываем callbacks
             vm.ExportToPdfAction = GanttChart.ExportToPdfWithDialog;
-            vm.PrintAction = GanttChart.Print;
         }
     }
     

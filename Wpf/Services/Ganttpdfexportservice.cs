@@ -15,7 +15,6 @@
 //
 // ═══════════════════════════════════════════════════════════════════════════════
 
-using System;
 using System.IO;
 using System.Windows;
 using System.Windows.Controls;
@@ -178,7 +177,7 @@ public class GanttPdfExportService
 
             // Перерисовываем
             invalidateCallback?.Invoke();
-            
+
             chartCanvas.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
             chartCanvas.Arrange(new Rect(0, 0, fullWidth, fullHeight));
             
@@ -211,7 +210,7 @@ public class GanttPdfExportService
             // ═══════════════════════════════════════════════════════════════════
             var chartBitmap = RenderCanvasToBitmap(chartCanvas, settings.Dpi, actualChartWidth, actualChartHeight);
             var headerBitmap = RenderCanvasToBitmap(headerCanvas, settings.Dpi, actualHeaderWidth, actualHeaderHeight);
-
+            BitmapSaveHelpers.SaveBitmapToPng(chartBitmap, "c:\\Users\\Konstruktiv54\\Desktop\\1.png");
             // ═══════════════════════════════════════════════════════════════════
             // ФАЗА 4: Создаём PDF
             // ═══════════════════════════════════════════════════════════════════
