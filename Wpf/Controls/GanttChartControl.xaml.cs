@@ -851,7 +851,8 @@ public partial class GanttChartControl : UserControl
         var totalDays = Math.Max(maxEnd.Days + 30, 60);
 
         var width = totalDays * ColumnWidth;
-        var height = Math.Max(ProjectManager.Tasks.Count * RowHeight + 20, ActualHeight);
+        //var height = Math.Max(ProjectManager.Tasks.Count * RowHeight + 20, ActualHeight);
+        var height = GetFullChartHeight();
 
         return (width, height);
     }
@@ -2262,33 +2263,12 @@ public partial class GanttChartControl : UserControl
         if (ProjectManager == null)
             return TaskLayer.Height > 0 ? TaskLayer.Height : TaskLayer.ActualHeight;
 
-        // ═══════════════════════════════════════════════════════════════════
         // Считаем ТОЛЬКО видимые задачи
-        // ═══════════════════════════════════════════════════════════════════
         var visibleTasks = GetVisibleTasks();
         var visibleTaskCount = visibleTasks.Count;
 
-        // ═══════════════════════════════════════════════════════════════════
         // Вычисляем высоту БЕЗ лишнего буфера
-        // ═══════════════════════════════════════════════════════════════════
-        // Формула: (количество задач × высота строки) + небольшой отступ снизу
-        var calculatedHeight = visibleTaskCount * RowHeight + BarSpacing;
-
-        // Сравниваем с реальным размером Canvas
-        //var canvasHeight = TaskLayer.Height > 0 ? TaskLayer.Height : TaskLayer.ActualHeight;
-
-        // Берём максимум, но НЕ добавляем искусственные строки
-        //var result = Math.Max(calculatedHeight, canvasHeight);
-
-        // ═══════════════════════════════════════════════════════════════════
-        // ДИАГНОСТИКА (можно удалить после отладки)
-        // ═══════════════════════════════════════════════════════════════════
-        System.Diagnostics.Debug.WriteLine($"GetFullChartHeight Analysis:");
-        System.Diagnostics.Debug.WriteLine($"  Visible tasks: {visibleTaskCount}");
-        System.Diagnostics.Debug.WriteLine($"  RowHeight: {RowHeight}");
-        System.Diagnostics.Debug.WriteLine($"  Calculated: {calculatedHeight:F0}");
-        //System.Diagnostics.Debug.WriteLine($"  Canvas Height: {canvasHeight:F0}");
-        //System.Diagnostics.Debug.WriteLine($"  Result: {result:F0}");
+        var calculatedHeight = (visibleTaskCount+5) * RowHeight;
 
         return calculatedHeight;
     }
@@ -2306,36 +2286,6 @@ public partial class GanttChartControl : UserControl
     /// </summary>
     public bool ExportToPdfWithDialog(string? defaultProjectName = null)
     {
-        
-        // ═══════════════════════════════════════════════════════════════
-        // ДИАГНОСТИКА - удалить после отладки
-        // ═══════════════════════════════════════════════════════════════
-        var diagInfo = $@"=== ДИАГНОСТИКА ЭКСПОРТА ===
-
-TaskLayer:
-  ActualWidth: {TaskLayer.ActualWidth}
-  ActualHeight: {TaskLayer.ActualHeight}
-  Width: {TaskLayer.Width}
-  Height: {TaskLayer.Height}
-  Children.Count: {TaskLayer.Children.Count}
-
-HeaderLayer:
-  ActualWidth: {HeaderCanvas.ActualWidth}
-  ActualHeight: {HeaderCanvas.ActualHeight}
-  Width: {HeaderCanvas.Width}
-  Height: {HeaderCanvas.Height}
-  Children.Count: {HeaderCanvas.Children.Count}
-
-Вычисленные размеры:
-  GetFullChartWidth(): {GetFullChartWidth()}
-  GetFullChartHeight(): {GetFullChartHeight()}
-
-ProjectManager:
-  Tasks.Count: {ProjectManager?.Tasks.Count ?? 0}
-";
-    
-        MessageBox.Show(diagInfo, "Диагностика", MessageBoxButton.OK, MessageBoxImage.Information);
-
         var dialog = new PdfExportDialog(defaultProjectName ?? "Диаграмма Ганта")
         {
             Owner = Window.GetWindow(this)

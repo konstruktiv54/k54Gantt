@@ -20,34 +20,10 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
-using Microsoft.Win32;
 using PdfSharpCore.Drawing;
 using PdfSharpCore.Pdf;
 
 namespace Wpf.Services;
-
-/// <summary>
-/// Формат бумаги.
-/// </summary>
-public enum PaperFormat
-{
-    A4,
-    A3,
-    A2,
-    A1,
-    Letter,
-    Legal,
-    Tabloid
-}
-
-/// <summary>
-/// Ориентация страницы.
-/// </summary>
-public enum PageOrientation
-{
-    Portrait,
-    Landscape
-}
 
 /// <summary>
 /// Настройки экспорта в PDF.
@@ -59,11 +35,8 @@ public class PdfExportSettings
     public bool ShowHeader { get; set; } = true;
     public bool ShowPageNumbers { get; set; } = true;
     public bool ShowExportDate { get; set; } = true;
-    public double Scale { get; set; } = 1.0;
     public double Dpi { get; set; } = 150;
     public double MarginMm { get; set; } = 15;
-    public PaperFormat PaperFormat { get; set; } = PaperFormat.A4;
-    public PageOrientation Orientation { get; set; } = PageOrientation.Landscape;
     
     /// <summary>
     /// Режим размещения: true = вся диаграмма на одной странице (кастомный размер).
@@ -77,69 +50,7 @@ public class PdfExportSettings
 public class GanttPdfExportService
 {
     private const double MmToPoint = 2.834645669;
-
-    private static (double Width, double Height) GetPageSize(PaperFormat format)
-    {
-        return format switch
-        {
-            PaperFormat.A4 => (595.0, 842.0),
-            PaperFormat.A3 => (842.0, 1191.0),
-            PaperFormat.A2 => (1191.0, 1684.0),
-            PaperFormat.A1 => (1684.0, 2384.0),
-            PaperFormat.Letter => (612.0, 792.0),
-            PaperFormat.Legal => (612.0, 1008.0),
-            PaperFormat.Tabloid => (792.0, 1224.0),
-            _ => (595.0, 842.0)
-        };
-    }
-
-    /// <summary>
-    /// Экспортирует диаграмму Ганта в PDF.
-    /// </summary>
-    public bool ExportToPdf(
-        Canvas chartCanvas, 
-        Canvas headerCanvas,
-        double fullWidth, 
-        double fullHeight,
-        Action? invalidateCallback = null,
-        PdfExportSettings? settings = null)
-    {
-        settings ??= new PdfExportSettings();
-
-        var saveDialog = new SaveFileDialog
-        {
-            Filter = "PDF документ (*.pdf)|*.pdf",
-            DefaultExt = ".pdf",
-            FileName = $"{settings.ProjectName}_{DateTime.Now:yyyy-MM-dd}"
-        };
-
-        if (saveDialog.ShowDialog() != true)
-            return false;
-
-        try
-        {
-            ExportToPdfFile(chartCanvas, headerCanvas, fullWidth, fullHeight, 
-                saveDialog.FileName, invalidateCallback, settings);
-
-            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
-            {
-                FileName = saveDialog.FileName,
-                UseShellExecute = true
-            });
-
-            return true;
-        }
-        catch (Exception ex)
-        {
-            MessageBox.Show(
-                $"Ошибка при экспорте в PDF:\n{ex.Message}",
-                "Ошибка",
-                MessageBoxButton.OK,
-                MessageBoxImage.Error);
-            return false;
-        }
-    }
-
+    
     /// <summary>
     /// Экспортирует диаграмму Ганта в указанный файл.
     /// </summary>
@@ -166,23 +77,27 @@ public class GanttPdfExportService
 
         try
         {
-            // ═══════════════════════════════════════════════════════════════════
+            var actualHeight = fullHeight*settings.Dpi/100;
+            var actualWidth = fullWidth*settings.Dpi/100;
+            var actualHeaderHeight = headerCanvas.ActualHeight*settings.Dpi/100;
+            
             // ФАЗА 1: Устанавливаем полные размеры и перерисовываем
-            // ═══════════════════════════════════════════════════════════════════
-            chartCanvas.Width = fullWidth;
-            chartCanvas.Height = fullHeight;
-            headerCanvas.Width = fullWidth;
+            chartCanvas.Width = actualWidth;
+            chartCanvas.Height = actualHeight;
+            headerCanvas.Width = actualWidth;
             chartCanvas.ClipToBounds = false;
             headerCanvas.ClipToBounds = false;
 
             // Перерисовываем
             invalidateCallback?.Invoke();
 
-            chartCanvas.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
+            //chartCanvas.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
+            chartCanvas.Measure(new Size(fullWidth, fullHeight));
             chartCanvas.Arrange(new Rect(0, 0, fullWidth, fullHeight));
             
-            headerCanvas.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
-            headerCanvas.Arrange(new Rect(0, 0, fullWidth, headerCanvas.DesiredSize.Height));
+            //headerCanvas.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
+            headerCanvas.Measure(new Size(fullWidth, headerCanvas.ActualHeight));
+            headerCanvas.Arrange(new Rect(0, 0, fullWidth, headerCanvas.ActualHeight));
             
             chartCanvas.UpdateLayout();
             headerCanvas.UpdateLayout();
@@ -190,30 +105,15 @@ public class GanttPdfExportService
             System.Windows.Threading.Dispatcher.CurrentDispatcher.Invoke(
                 System.Windows.Threading.DispatcherPriority.Render, 
                 new Action(() => { }));
+            
 
-            // ═══════════════════════════════════════════════════════════════════
-            // ФАЗА 2: Получаем РЕАЛЬНЫЕ размеры после рендеринга
-            // ═══════════════════════════════════════════════════════════════════
-            var actualChartWidth = chartCanvas.ActualWidth > 0 ? chartCanvas.ActualWidth : fullWidth;
-            var actualChartHeight = chartCanvas.ActualHeight > 0 ? chartCanvas.ActualHeight : fullHeight;
-            var actualHeaderWidth = headerCanvas.ActualWidth > 0 ? headerCanvas.ActualWidth : fullWidth;
-            var actualHeaderHeight = headerCanvas.ActualHeight > 0 ? headerCanvas.ActualHeight : 50;
+            // ФАЗА 2: Рендерим в bitmap используя РЕАЛЬНЫЕ размеры
 
-            System.Diagnostics.Debug.WriteLine($"═══ Export Size Analysis ═══");
-            System.Diagnostics.Debug.WriteLine($"Requested:  Chart {fullWidth:F0} × {fullHeight:F0}");
-            System.Diagnostics.Debug.WriteLine($"Actual:     Chart {actualChartWidth:F0} × {actualChartHeight:F0}");
-            System.Diagnostics.Debug.WriteLine($"Difference: {Math.Abs(fullHeight - actualChartHeight):F0} units");
-            System.Diagnostics.Debug.WriteLine($"═══════════════════════════");
-
-            // ═══════════════════════════════════════════════════════════════════
-            // ФАЗА 3: Рендерим в bitmap используя РЕАЛЬНЫЕ размеры
-            // ═══════════════════════════════════════════════════════════════════
-            var chartBitmap = RenderCanvasToBitmap(chartCanvas, settings.Dpi, actualChartWidth, actualChartHeight);
-            var headerBitmap = RenderCanvasToBitmap(headerCanvas, settings.Dpi, actualHeaderWidth, actualHeaderHeight);
-            BitmapSaveHelpers.SaveBitmapToPng(chartBitmap, "c:\\Users\\Konstruktiv54\\Desktop\\1.png");
-            // ═══════════════════════════════════════════════════════════════════
+            var chartBitmap = RenderCanvasToBitmap(chartCanvas, settings.Dpi, actualWidth, actualHeight);
+            //var gridBitmap = RenderCanvasToBitmap(headerCanvas, settings.Dpi, actualWidth, headerCanvas.Height);
+            var headerBitmap = RenderCanvasToBitmap(headerCanvas, settings.Dpi, actualWidth, actualHeaderHeight);
+            
             // ФАЗА 4: Создаём PDF
-            // ═══════════════════════════════════════════════════════════════════
             CreatePdfDocument(chartBitmap, headerBitmap, filePath, settings);
         }
         finally
@@ -238,14 +138,7 @@ public class GanttPdfExportService
     private void CreatePdfDocument(BitmapSource chartBitmap, BitmapSource headerBitmap, 
         string filePath, PdfExportSettings settings)
     {
-        if (settings.FitToSinglePage)
-        {
             CreateSinglePagePdf(chartBitmap, headerBitmap, filePath, settings);
-        }
-        else
-        {
-            CreateMultiPagePdf(chartBitmap, headerBitmap, filePath, settings);
-        }
     }
 
     /// <summary>
@@ -392,167 +285,101 @@ public class GanttPdfExportService
         var xImage = XImage.FromStream(() => new MemoryStream(stream.ToArray()));
         gfx.DrawImage(xImage, destX, destY, destWidth, destHeight);
     }
-
-    /// <summary>
-    /// Создаёт PDF с несколькими страницами (существующая логика).
-    /// </summary>
-    private void CreateMultiPagePdf(BitmapSource chartBitmap, BitmapSource headerBitmap,
-        string filePath, PdfExportSettings settings)
-    {
-        var document = new PdfDocument();
-        document.Info.Title = settings.ProjectName;
-        document.Info.Author = Environment.UserName;
-        document.Info.Subject = "Диаграмма Ганта";
-        document.Info.Creator = "Gantt Chart Application";
-
-        var (baseWidth, baseHeight) = GetPageSize(settings.PaperFormat);
-        var pageWidth = settings.Orientation == PageOrientation.Landscape ? baseHeight : baseWidth;
-        var pageHeight = settings.Orientation == PageOrientation.Landscape ? baseWidth : baseHeight;
-
-        var margin = settings.MarginMm * MmToPoint;
-        var contentWidth = pageWidth - 2 * margin;
-        var contentHeight = pageHeight - 2 * margin;
-        var headerAreaHeight = settings.ShowHeader ? 40.0 : 0;
-        var footerAreaHeight = settings.ShowPageNumbers ? 20.0 : 0;
-        var imageAreaHeight = contentHeight - headerAreaHeight - footerAreaHeight - 10;
-
-        var chartWidthPts = chartBitmap.PixelWidth * 72.0 / settings.Dpi;
-        var chartHeightPts = chartBitmap.PixelHeight * 72.0 / settings.Dpi;
-        var headerHeightPts = headerBitmap.PixelHeight * 72.0 / settings.Dpi;
-
-        var baseScaleFactor = contentWidth / chartWidthPts;
-        var effectiveScale = baseScaleFactor * settings.Scale;
-
-        var scaledChartWidth = chartWidthPts * effectiveScale;
-        var scaledChartHeight = chartHeightPts * effectiveScale;
-        var scaledHeaderHeight = Math.Min(headerHeightPts * effectiveScale, 80.0);
-
-        var columnsNeeded = Math.Max(1, (int)Math.Ceiling(scaledChartWidth / contentWidth));
-        var chartWidthPerPage = scaledChartWidth / columnsNeeded;
-        var availableHeightPerPage = imageAreaHeight - scaledHeaderHeight;
-        var rowsNeeded = Math.Max(1, (int)Math.Ceiling(scaledChartHeight / availableHeightPerPage));
-        var totalPages = columnsNeeded * rowsNeeded;
-
-        for (var pageNum = 1; pageNum <= totalPages; pageNum++)
-        {
-            var col = (pageNum - 1) % columnsNeeded;
-            var row = (pageNum - 1) / columnsNeeded;
-
-            var page = document.AddPage();
-            page.Width = pageWidth;
-            page.Height = pageHeight;
-
-            using var gfx = XGraphics.FromPdfPage(page);
-
-            if (settings.ShowHeader)
-            {
-                DrawPageHeader(gfx, settings, margin, margin, contentWidth, pageNum, totalPages);
-            }
-
-            var imageStartY = margin + headerAreaHeight;
-
-            if (row == 0)
-            {
-                var headerSourceX = (int)(col * headerBitmap.PixelWidth / columnsNeeded);
-                var headerSourceWidth = Math.Min(
-                    (int)(headerBitmap.PixelWidth / columnsNeeded),
-                    headerBitmap.PixelWidth - headerSourceX);
-
-                if (headerSourceWidth > 0)
-                {
-                    var headerSourceRect = new Int32Rect(headerSourceX, 0, headerSourceWidth, headerBitmap.PixelHeight);
-                    DrawBitmapSection(gfx, headerBitmap, headerSourceRect,
-                        margin, imageStartY, chartWidthPerPage, scaledHeaderHeight);
-                }
-
-                imageStartY += scaledHeaderHeight;
-            }
-
-            var sourceX = (int)(col * chartBitmap.PixelWidth / columnsNeeded);
-            var sourceY = (int)(row * availableHeightPerPage / effectiveScale * settings.Dpi / 72.0);
-            var sourceWidth = Math.Min(
-                (int)(chartBitmap.PixelWidth / columnsNeeded),
-                chartBitmap.PixelWidth - sourceX);
-            var sourceHeight = Math.Min(
-                (int)(availableHeightPerPage / effectiveScale * settings.Dpi / 72.0),
-                chartBitmap.PixelHeight - sourceY);
-
-            if (sourceWidth > 0 && sourceHeight > 0 && sourceY < chartBitmap.PixelHeight)
-            {
-                var chartSourceRect = new Int32Rect(sourceX, sourceY, sourceWidth, sourceHeight);
-                var destHeight = sourceHeight * 72.0 / settings.Dpi * effectiveScale;
-
-                DrawBitmapSection(gfx, chartBitmap, chartSourceRect,
-                    margin, imageStartY, chartWidthPerPage, destHeight);
-            }
-
-            if (settings.ShowPageNumbers)
-            {
-                var pageText = columnsNeeded > 1
-                    ? $"Страница {pageNum} из {totalPages} (колонка {col + 1}, ряд {row + 1})"
-                    : $"Страница {pageNum} из {totalPages}";
-                DrawPageFooter(gfx, pageText, margin, pageHeight - margin, contentWidth);
-            }
-        }
-
-        document.Save(filePath);
-    }
-
+    
     private BitmapSource RenderCanvasToBitmap(Canvas canvas, double dpi, double targetWidth, double targetHeight)
     {
-        var width = targetWidth > 0 ? targetWidth : (canvas.ActualWidth > 0 ? canvas.ActualWidth : 800);
-        var height = targetHeight > 0 ? targetHeight : (canvas.ActualHeight > 0 ? canvas.ActualHeight : 600);
+        // ФИКСИРУЕМ РАЗМЕРЫ - используем ТОЛЬКО переданные значения
+        var width = targetWidth;
+        var height = targetHeight;
 
-        var scale = dpi / 96.0;
+        // Для диагностики
+        System.Diagnostics.Debug.WriteLine($"RenderCanvasToBitmap:");
+        System.Diagnostics.Debug.WriteLine($"  Target: {width:F0} × {height:F0}");
+        System.Diagnostics.Debug.WriteLine($"  DPI: {dpi}");
+        
+        
+        // ПРЯМОЕ ВЫЧИСЛЕНИЕ РАЗМЕРОВ В ПИКСЕЛЯХ (без сложной логики)
+        var scale =  dpi / 96.0;
         var pixelWidth = (int)(width * scale);
         var pixelHeight = (int)(height * scale);
+        
+        // ПРОСТОЕ ОГРАНИЧЕНИЕ РАЗМЕРА (сохраняем пропорции)
+        const int maxPixels = 32000;
 
-        const int maxPixels = 16000;
-        if (pixelWidth > maxPixels)
+        if (pixelWidth > maxPixels || pixelHeight > maxPixels)
         {
-            var ratio = (double)maxPixels / pixelWidth;
-            pixelWidth = maxPixels;
+            var ratio = Math.Min((double)maxPixels / pixelWidth, (double)maxPixels / pixelHeight);
+            pixelWidth = (int)(pixelWidth * ratio);
             pixelHeight = (int)(pixelHeight * ratio);
             scale *= ratio;
-        }
-        if (pixelHeight > maxPixels)
-        {
-            var ratio = (double)maxPixels / pixelHeight;
-            pixelHeight = maxPixels;
-            pixelWidth = (int)(pixelWidth * ratio);
-            scale *= ratio;
+
+            System.Diagnostics.Debug.WriteLine($"  Scaled to: {pixelWidth} × {pixelHeight} (ratio: {ratio:F3})");
         }
 
+        System.Diagnostics.Debug.WriteLine($"  Final pixels: {pixelWidth} × {pixelHeight}");
+        System.Diagnostics.Debug.WriteLine($"  Final scale: {scale:F3}");
+        
+        // УПРОЩЕННЫЙ РЕНДЕРИНГ (убираем лишние преобразования)
         var renderBitmap = new RenderTargetBitmap(
             pixelWidth,
             pixelHeight,
             dpi,
             dpi,
             PixelFormats.Pbgra32);
+        
+        var drawingVisual = new DrawingVisual();
 
-        var visual = new DrawingVisual();
-        using (var context = visual.RenderOpen())
+        using (var drawingContext = drawingVisual.RenderOpen())
         {
-            context.DrawRectangle(Brushes.White, null, new Rect(0, 0, pixelWidth, pixelHeight));
+            // 1. Белый фон на ВСЮ площадь bitmap
+            //drawingContext.DrawRectangle(Brushes.White, null, new Rect(0, 0, pixelWidth, pixelHeight));
 
-            var brush = new VisualBrush(canvas)
-            {
-                Stretch = Stretch.None,
-                AlignmentX = AlignmentX.Left,
-                AlignmentY = AlignmentY.Top,
-                ViewboxUnits = BrushMappingMode.Absolute,
-                Viewbox = new Rect(0, 0, width, height),
-                ViewportUnits = BrushMappingMode.Absolute,
-                Viewport = new Rect(0, 0, width, height)
-            };
-
-            context.PushTransform(new ScaleTransform(scale, scale));
-            context.DrawRectangle(brush, null, new Rect(0, 0, width, height));
-            context.Pop();
+            // 2. Прямой рендеринг Canvas с масштабированием
+            // Убираем VisualBrush - используем прямое рисование
+            drawingContext.PushTransform(new ScaleTransform(scale, scale));
+            drawingContext.DrawRectangle(
+                new VisualBrush(canvas)
+                {
+                    Stretch = Stretch.None,
+                    Viewbox = new Rect(0, 0, width, height),
+                    ViewboxUnits = BrushMappingMode.Absolute
+                },
+                null,
+                new Rect(0, 0, width, height));
+            drawingContext.Pop();
         }
 
-        renderBitmap.Render(visual);
+        renderBitmap.Render(drawingVisual);
+        SaveBitmapToPng(renderBitmap, "c:\\Users\\Konstruktiv54\\Desktop\\1.png");
         return renderBitmap;
+    }
+    
+    // Сохраняет BitmapSource в PNG по указанному пути
+    public static void SaveBitmapToPng(BitmapSource bitmap, string filePath)
+    {
+        if (bitmap == null) throw new ArgumentNullException(nameof(bitmap));
+        var dir = Path.GetDirectoryName(filePath);
+        if (!string.IsNullOrEmpty(dir)) Directory.CreateDirectory(dir);
+
+        var encoder = new PngBitmapEncoder();
+        encoder.Frames.Add(BitmapFrame.Create(bitmap));
+        using (var fs = new FileStream(filePath, FileMode.Create, FileAccess.Write, FileShare.None))
+        {
+            encoder.Save(fs);
+        }
+    }
+
+    // Возвращает PNG как массив байтов (удобно для тестов)
+    public static byte[] BitmapToPngBytes(BitmapSource bitmap)
+    {
+        if (bitmap == null) throw new ArgumentNullException(nameof(bitmap));
+        var encoder = new PngBitmapEncoder();
+        encoder.Frames.Add(BitmapFrame.Create(bitmap));
+        using (var ms = new MemoryStream())
+        {
+            encoder.Save(ms);
+            return ms.ToArray();
+        }
     }
 
     private void DrawPageHeader(XGraphics gfx, PdfExportSettings settings,

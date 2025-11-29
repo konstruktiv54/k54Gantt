@@ -70,10 +70,8 @@
                 <!-- Название проекта -->
                 <TextBlock Text="Название проекта" Style="{StaticResource LabelStyle}"/>
                 <TextBox x:Name="ProjectNameTextBox" Margin="0,0,0,8"/>
-
-                <!-- ═══════════════════════════════════════════════════════════════ -->
+                
                 <!-- СЕКЦИЯ: Режим размещения -->
-                <!-- ═══════════════════════════════════════════════════════════════ -->
                 <TextBlock Text="📐 Режим размещения" Style="{StaticResource SectionStyle}"/>
                 
                 <RadioButton x:Name="FitToPageRadioButton" 
@@ -81,58 +79,13 @@
                              Content="Вся диаграмма на одной странице (рекомендуется)"
                              IsChecked="True"/>
                 
-                <RadioButton x:Name="MultiPageRadioButton" 
-                             GroupName="PageMode"
-                             Content="Разбить на несколько страниц"/>
                 
                 <TextBlock Text="В режиме 'одна страница' размер подбирается автоматически. Формат и ориентация игнорируются." 
                            FontSize="10" 
                            Foreground="#9E9E9E" 
                            Margin="16,0,0,8" 
                            TextWrapping="Wrap"/>
-
-                <!-- ═══════════════════════════════════════════════════════════════ -->
-                <!-- СЕКЦИЯ: Страница (только для многостраничного режима) -->
-                <!-- ═══════════════════════════════════════════════════════════════ -->
-                <TextBlock Text="📄 Страница" Style="{StaticResource SectionStyle}"/>
                 
-                <Grid Margin="0,0,0,8">
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="*"/>
-                        <ColumnDefinition Width="12"/>
-                        <ColumnDefinition Width="*"/>
-                    </Grid.ColumnDefinitions>
-                    <Grid.RowDefinitions>
-                        <RowDefinition Height="Auto"/>
-                        <RowDefinition Height="Auto"/>
-                    </Grid.RowDefinitions>
-                    
-                    <!-- Формат -->
-                    <TextBlock Grid.Row="0" Grid.Column="0" Text="Формат" Style="{StaticResource LabelStyle}"/>
-                    <ComboBox x:Name="PaperFormatComboBox" Grid.Row="1" Grid.Column="0" SelectedIndex="0">
-                        <ComboBoxItem Content="A4 (210 × 297 мм)" Tag="A4"/>
-                        <ComboBoxItem Content="A3 (297 × 420 мм)" Tag="A3"/>
-                        <ComboBoxItem Content="A2 (420 × 594 мм)" Tag="A2"/>
-                        <ComboBoxItem Content="A1 (594 × 841 мм)" Tag="A1"/>
-                        <ComboBoxItem Content="Letter (8.5 × 11 in)" Tag="Letter"/>
-                        <ComboBoxItem Content="Legal (8.5 × 14 in)" Tag="Legal"/>
-                        <ComboBoxItem Content="Tabloid (11 × 17 in)" Tag="Tabloid"/>
-                    </ComboBox>
-                    
-                    <!-- Ориентация -->
-                    <TextBlock Grid.Row="0" Grid.Column="2" Text="Ориентация" Style="{StaticResource LabelStyle}"/>
-                    <ComboBox x:Name="OrientationComboBox" Grid.Row="1" Grid.Column="2" SelectedIndex="0">
-                        <ComboBoxItem Content="Альбомная" Tag="Landscape"/>
-                        <ComboBoxItem Content="Книжная" Tag="Portrait"/>
-                    </ComboBox>
-                </Grid>
-
-                <TextBlock Text="⚠️ Формат и ориентация применяются только в многостраничном режиме." 
-                           FontSize="10" 
-                           Foreground="#FF6F00" 
-                           Margin="0,0,0,8" 
-                           TextWrapping="Wrap"/>
-
                 <!-- ═══════════════════════════════════════════════════════════════ -->
                 <!-- СЕКЦИЯ: Качество и масштаб -->
                 <!-- ═══════════════════════════════════════════════════════════════ -->
@@ -147,28 +100,8 @@
                     <ComboBoxItem Content="Максимальное (300 DPI) — большой файл" Tag="300"/>
                 </ComboBox>
 
-                <!-- Масштаб (только для многостраничного) -->
-                <TextBlock Style="{StaticResource LabelStyle}">
-                    <Run Text="Масштаб диаграммы (для многостраничного режима)"/>
-                </TextBlock>
-                <Grid Margin="0,0,0,4">
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="*"/>
-                        <ColumnDefinition Width="60"/>
-                    </Grid.ColumnDefinitions>
-                    <Slider x:Name="ScaleSlider" 
-                            Minimum="50" Maximum="200" Value="100"
-                            TickFrequency="25" IsSnapToTickEnabled="True"
-                            TickPlacement="BottomRight"
-                            VerticalAlignment="Center"/>
-                    <TextBlock Grid.Column="1" 
-                               Text="{Binding ElementName=ScaleSlider, Path=Value, StringFormat={}{0:0}%}"
-                               VerticalAlignment="Center"
-                               HorizontalAlignment="Right"
-                               FontWeight="Medium"/>
-                </Grid>
-                <TextBlock Text="100% = вписывается в ширину страницы. Меньше = мельче, больше помещается." 
-                           FontSize="10" Foreground="#9E9E9E" Margin="0,0,0,8" TextWrapping="Wrap"/>
+
+
 
                 <!-- ═══════════════════════════════════════════════════════════════ -->
                 <!-- СЕКЦИЯ: Опции -->
@@ -190,7 +123,6 @@
                 <CheckBox x:Name="OpenAfterExportCheckBox" 
                           Content="Открыть PDF после создания"
                           IsChecked="True"/>
-
             </StackPanel>
         </ScrollViewer>
 

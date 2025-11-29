@@ -45,10 +45,7 @@ public partial class PdfExportDialog : Window
             ShowHeader = ShowHeaderCheckBox.IsChecked ?? true,
             ShowExportDate = ShowDateCheckBox.IsChecked ?? true,
             ShowPageNumbers = ShowPageNumbersCheckBox.IsChecked ?? true,
-            Scale = ScaleSlider.Value / 100.0,
             Dpi = GetSelectedDpi(),
-            PaperFormat = GetSelectedPaperFormat(),
-            Orientation = GetSelectedOrientation(),
             FitToSinglePage = FitToPageRadioButton.IsChecked ?? true  // ← ДОБАВЛЕНО
         };
 
@@ -65,33 +62,5 @@ public partial class PdfExportDialog : Window
             return double.TryParse(dpiStr, out var dpi) ? dpi : 150;
         }
         return 150;
-    }
-
-    private PaperFormat GetSelectedPaperFormat()
-    {
-        if (PaperFormatComboBox.SelectedItem is ComboBoxItem item && item.Tag is string tag)
-        {
-            return tag switch
-            {
-                "A4" => PaperFormat.A4,
-                "A3" => PaperFormat.A3,
-                "A2" => PaperFormat.A2,
-                "A1" => PaperFormat.A1,
-                "Letter" => PaperFormat.Letter,
-                "Legal" => PaperFormat.Legal,
-                "Tabloid" => PaperFormat.Tabloid,
-                _ => PaperFormat.A4
-            };
-        }
-        return PaperFormat.A4;
-    }
-
-    private PageOrientation GetSelectedOrientation()
-    {
-        if (OrientationComboBox.SelectedItem is ComboBoxItem item && item.Tag is string tag)
-        {
-            return tag == "Portrait" ? PageOrientation.Portrait : PageOrientation.Landscape;
-        }
-        return PageOrientation.Landscape;
     }
 }
