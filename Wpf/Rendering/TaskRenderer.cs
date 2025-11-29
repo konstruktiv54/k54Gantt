@@ -226,21 +226,50 @@ public class TaskRenderer
 
     private void RenderGroupTask(Canvas canvas, Task task, double x, double y, double width, double height)
     {
-        // Групповая задача отображается как "скобка" с уголками
+        // Вычисляем прогресс групповой задачи на основе дочерних задач
+        float groupProgress = CalculateGroupProgress(task);
+        bool isCompleted = groupProgress >= 1.0f;
+
+        // Определяем цвет группы: зелёный для 100%, обычный для остальных
+        var groupBrush = isCompleted ? _taskCompletedBrush : _groupTaskBrush;
+        var progressBrush = isCompleted ? _taskCompletedBrush : _taskBarProgressBrush;
+
         var groupHeight = height * 0.4;
         var bracketHeight = height * 0.3;
 
-        // Основная линия
+        // Основная линия (фон)
         var mainLine = new Rectangle
         {
             Width = width,
             Height = groupHeight,
-            Fill = _groupTaskBrush
+            Fill = groupBrush,
+            RadiusX = 3,
+            RadiusY = 3
         };
 
         Canvas.SetLeft(mainLine, x);
         Canvas.SetTop(mainLine, y + (height - groupHeight) / 2);
         canvas.Children.Add(mainLine);
+
+        // Полоса прогресса (только если не 100%)
+        if (groupProgress > 0 && groupProgress < 1.0f)
+        {
+            var progressWidth = width * groupProgress;
+
+            var progressLine = new Rectangle
+            {
+                Width = Math.Max(progressWidth, 2),
+                Height = groupHeight,
+                Fill = progressBrush,
+                RadiusX = 3,
+                RadiusY = 3,
+                Clip = new RectangleGeometry(new Rect(0, 0, progressWidth, groupHeight), 3, 3)
+            };
+
+            Canvas.SetLeft(progressLine, x);
+            Canvas.SetTop(progressLine, y + (height - groupHeight) / 2);
+            canvas.Children.Add(progressLine);
+        }
 
         // Левая скобка (уголок вниз)
         var leftBracket = new Polygon
@@ -251,7 +280,7 @@ public class TaskRenderer
                 new Point(8, 0),
                 new Point(0, bracketHeight)
             },
-            Fill = _groupTaskBrush
+            Fill = groupBrush
         };
 
         Canvas.SetLeft(leftBracket, x);
@@ -267,14 +296,14 @@ public class TaskRenderer
                 new Point(0, 0),
                 new Point(8, bracketHeight)
             },
-            Fill = _groupTaskBrush
+            Fill = groupBrush
         };
 
         Canvas.SetLeft(rightBracket, x + width - 8);
         Canvas.SetTop(rightBracket, y + (height - groupHeight) / 2 + groupHeight);
         canvas.Children.Add(rightBracket);
 
-        // Иконка сворачивания (± )
+        // Иконка сворачивания (±)
         var collapseIcon = task.IsCollapsed ? "+" : "−";
         var iconText = new TextBlock
         {
@@ -288,6 +317,72 @@ public class TaskRenderer
         Canvas.SetLeft(iconText, x + 2);
         Canvas.SetTop(iconText, y + (height - iconText.DesiredSize.Height) / 2 - 2);
         canvas.Children.Add(iconText);
+
+        // Галочка для завершённых групп
+        if (isCompleted)
+        {
+            var checkMark = new TextBlock
+            {
+                Text = "✓",
+                FontSize = 12,
+                FontWeight = FontWeights.Bold,
+                Foreground = Brushes.White
+            };
+
+            checkMark.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
+            Canvas.SetLeft(checkMark, x + (width - checkMark.DesiredSize.Width) / 2);
+            Canvas.SetTop(checkMark, y + (height - checkMark.DesiredSize.Height) / 2);
+            canvas.Children.Add(checkMark);
+        }
+        // Процент выполнения для групп (если достаточно места)
+        else if (width >= 40 && groupProgress > 0)
+        {
+            var percentText = new TextBlock
+            {
+                Text = $"{(int)(groupProgress * 100)}%",
+                FontSize = 9,
+                Foreground = _textBrush,
+                FontWeight = FontWeights.SemiBold
+            };
+
+            percentText.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
+            Canvas.SetLeft(percentText, x + (width - percentText.DesiredSize.Width) / 2);
+            Canvas.SetTop(percentText, y + (height - percentText.DesiredSize.Height) / 2);
+            canvas.Children.Add(percentText);
+        }
+    }
+
+    /// <summary>
+    /// Вычисляет прогресс групповой задачи на основе дочерних задач.
+    /// </summary>
+    private float CalculateGroupProgress(Task groupTask)
+    {
+        if (_control.ProjectManager == null)
+            return 0f;
+        
+        var children = _control.ProjectManager.MembersOf(groupTask).ToList();
+        if (children.Count == 0)
+            return 0f;
+
+        // Вычисляем средний прогресс по всем дочерним задачам
+        float totalProgress = 0f;
+        int count = 0;
+
+        foreach (var child in children)
+        {
+            // Рекурсивно вычисляем прогресс для вложенных групп
+            if (_control.ProjectManager.IsGroup(child))
+            {
+                totalProgress += CalculateGroupProgress(child);
+            }
+            else
+            {
+                totalProgress += child.Complete;
+            }
+            count++;
+        }
+
+        return count > 0 ? totalProgress / count : 0f;
     }
 
     private void RenderSplitTask(Canvas canvas, Task splitTask, int rowIndex)

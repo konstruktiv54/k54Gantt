@@ -20,6 +20,7 @@ public static class XpsService
         Canvas headerCanvas,
         Canvas chartCanvas,
         Canvas gridCanvas,
+        Canvas todayCanvas,
         double chartStart,// можно передать null, если не нужен GridRenderer
         double chartWidth,
         string xpsPath)
@@ -68,6 +69,12 @@ public static class XpsService
         FixedPage.SetLeft(chartClone, 0);
         FixedPage.SetTop(chartClone, headerHeight);
         fixedPage.Children.Add(chartClone);
+        
+        // 7. ChartCanvas - под header, ТА ЖЕ ШИРИНА
+        var todayClone= CloneCanvasAsVisual(todayCanvas, commonWidth, gridHeight);
+        FixedPage.SetLeft(todayClone, 0);
+        FixedPage.SetTop(todayClone, headerHeight);
+        fixedPage.Children.Add(todayClone);
     
         // 8. Создаём FixedDocument
         FixedDocument fixedDocument = new FixedDocument();
@@ -85,9 +92,6 @@ public static class XpsService
         
     private static Canvas CloneCanvasAsVisual(Canvas source, double width, double height)
     {
-        if (source == null) 
-            return new Canvas();
-
         var canvasCopy = new Canvas
         {
             Width = width,

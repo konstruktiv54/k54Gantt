@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
@@ -805,7 +806,7 @@ public partial class GanttChartControl : UserControl
     #endregion
 
     #region Private Methods - Rendering
-
+    
     private int GetRealTaskIndex(Task task)
     {
         if (ProjectManager == null) return -1;
@@ -916,6 +917,59 @@ public partial class GanttChartControl : UserControl
         };
 
         TodayLayer.Children.Add(line);
+    }
+
+    private Canvas? GetTodayLayerForExport()
+    {
+        if (!ShowTodayLine || ProjectManager == null)
+            return null;
+
+        var todayOffset = (DateTime.Today - ProjectManager.Start).Days;
+        if (todayOffset < 0)
+            return null;
+
+        // Получаем реальные размеры из других слоев
+        double actualWidth = GridLayer.ActualWidth > 0 ? GridLayer.ActualWidth : GridLayer.Width;
+        double actualHeight = GridLayer.ActualHeight > 0 ? GridLayer.ActualHeight : GridLayer.Height;
+
+        // Если все еще нулевые, используем расчетные размеры
+        if (actualWidth <= 0) actualWidth = GetChartEnd() - GetChartStart();
+        if (actualHeight <= 0) actualHeight = GetFullChartHeight();
+        
+        Debug.WriteLine($"TodayCanvas dimensions: {actualWidth}x{actualHeight}");
+
+        // Создаем Canvas с ЯВНО установленными размерами
+        var exportCanvas = new Canvas
+        {
+            Width = actualWidth,
+            Height = actualHeight,
+            Background = Brushes.Transparent
+        };
+
+        // Принудительно вызываем Measure и Arrange для установки Actual размеров
+        exportCanvas.Measure(new Size(actualWidth, actualHeight));
+        exportCanvas.Arrange(new Rect(0, 0, actualWidth, actualHeight));
+
+        var x = todayOffset * ColumnWidth + ColumnWidth / 2;
+
+        // Создаем линию с явными координатами
+        var line = new Line
+        {
+            X1 = x,
+            Y1 = 0,
+            X2 = x,
+            Y2 = actualHeight, // Используем установленную высоту
+            Stroke = FindResource("TodayLineBrush") as Brush ?? Brushes.Red,
+            StrokeThickness = 2,
+            StrokeDashArray = new DoubleCollection { 4, 2 },
+            SnapsToDevicePixels = true
+        };
+        
+        exportCanvas.Children.Add(line);
+    
+        Debug.WriteLine($"Created Today line: X1={x}, Y2={actualHeight}, ActualSize={exportCanvas.ActualWidth}x{exportCanvas.ActualHeight}");
+
+        return exportCanvas;
     }
 
     private void RenderRelations()
@@ -2354,15 +2408,18 @@ public partial class GanttChartControl : UserControl
     public void ExportToXpsFile(
         Canvas chartCanvas, 
         Canvas headerCanvas,
-        Canvas gridCanvas,double chartStart, double charWidth,
+        Canvas gridCanvas,
+        double chartStart,
+        double charWidth,
         string filePath)
     {
         try
         {
-            // ═══════════════════════════════════════════════════════════════════
-            // ПРОСТО ВЫЗЫВАЕМ XPS СЕРВИС - ВСЯ СЛОЖНАЯ ЛОГИКА НЕ НУЖНА!
-            // ═══════════════════════════════════════════════════════════════════
-            XpsService.SaveHeaderAndChartToXps_FixedPage(headerCanvas, chartCanvas, gridCanvas, chartStart, charWidth, filePath);
+            // Получаем Canvas с линией Today, переиспользуя логику рендеринга
+            var todayCanvas = GetTodayLayerForExport();
+            XpsService.SaveHeaderAndChartToXps_FixedPage(headerCanvas, chartCanvas, gridCanvas, todayCanvas,chartStart, charWidth, filePath);
+            
+            //XpsService.SaveHeaderAndChartToXps_FixedPage(todayCanvas, todayCanvas, todayCanvas, todayCanvas,chartStart, charWidth, filePath);
         }
         catch (Exception ex)
         {
