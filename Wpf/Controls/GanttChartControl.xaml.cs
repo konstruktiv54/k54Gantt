@@ -2225,9 +2225,7 @@ public partial class GanttChartControl : UserControl
         if (ProjectManager == null)
             return TaskLayer.Width > 0 ? TaskLayer.Width : TaskLayer.ActualWidth;
 
-        // ═══════════════════════════════════════════════════════════════════
         // Находим максимальную дату среди всех элементов
-        // ═══════════════════════════════════════════════════════════════════
         var maxEnd = TimeSpan.Zero;
 
         foreach (var task in ProjectManager.Tasks)
@@ -2317,6 +2315,7 @@ public partial class GanttChartControl : UserControl
             exportService.ExportToPdfFile(
                 TaskLayer,
                 HeaderCanvas,
+                GridLayer,
                 fullWidth,
                 fullHeight,
                 saveDialog.FileName,

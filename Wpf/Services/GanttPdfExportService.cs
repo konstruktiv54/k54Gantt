@@ -61,6 +61,7 @@ public class GanttPdfExportService
     public void ExportToPdfFile(
         Canvas chartCanvas, 
         Canvas headerCanvas,
+        Canvas gridCanvas,
         double fullWidth,      // Теоретическая полная ширина (может быть > ActualWidth)
         double fullHeight,     // Теоретическая полная высота (может быть > ActualHeight)
         string filePath,
@@ -112,6 +113,14 @@ public class GanttPdfExportService
             var chartBitmap = RenderCanvasToBitmap(chartCanvas, settings.Dpi, actualWidth, actualHeight);
             //var gridBitmap = RenderCanvasToBitmap(headerCanvas, settings.Dpi, actualWidth, headerCanvas.Height);
             var headerBitmap = RenderCanvasToBitmap(headerCanvas, settings.Dpi, actualWidth, actualHeaderHeight);
+            
+            
+            // var xpsPath1 = @"c:\Users\Konstruktiv54\Desktop\3.xps";
+            // XpsService.SaveHeaderChartAndGridToXps_FixedPage(headerCanvas,chartCanvas,gridCanvas, xpsPath1, actualWidth,actualHeaderHeight,fullHeight);
+            var xpsPath2 = @"c:\Users\Konstruktiv54\Desktop\4.xps";
+            XpsService.SaveHeaderAndChartToXps_FixedPage(headerCanvas, chartCanvas, gridCanvas, xpsPath2);
+            // var xpsPath2 = @"C:\temp\gantt1.xps";
+            // XpsService.SaveCanvasToXps(headerCanvas, xpsPath2, fullWidth, fullHeight);
             
             // ФАЗА 4: Создаём PDF
             CreatePdfDocument(chartBitmap, headerBitmap, filePath, settings);
@@ -348,7 +357,7 @@ public class GanttPdfExportService
                 new Rect(0, 0, width, height));
             drawingContext.Pop();
         }
-
+        
         renderBitmap.Render(drawingVisual);
         SaveBitmapToPng(renderBitmap, "c:\\Users\\Konstruktiv54\\Desktop\\1.png");
         return renderBitmap;
