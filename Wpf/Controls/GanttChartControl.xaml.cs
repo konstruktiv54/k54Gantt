@@ -891,35 +891,8 @@ public partial class GanttChartControl : UserControl
         TaskLayer.Children.Clear();
         _taskRenderer.Render(TaskLayer);
     }
-
-    private void RenderTodayLine()
-    {
-        TodayLayer.Children.Clear();
-
-        if (!ShowTodayLine || ProjectManager == null)
-            return;
-
-        var todayOffset = (DateTime.Today - ProjectManager.Start).Days;
-        if (todayOffset < 0)
-            return;
-
-        var x = todayOffset * ColumnWidth + ColumnWidth / 2;
-
-        var line = new Line
-        {
-            X1 = x,
-            Y1 = 0,
-            X2 = x,
-            Y2 = TodayLayer.Height,
-            Stroke = FindResource("TodayLineBrush") as Brush ?? Brushes.Red,
-            StrokeThickness = 2,
-            StrokeDashArray = new DoubleCollection { 4, 2 }
-        };
-
-        TodayLayer.Children.Add(line);
-    }
-
-    private Canvas? GetTodayLayerForExport()
+    
+    private Line CreateTodayLine(double canvasWidth, double canvasHeight)
     {
         if (!ShowTodayLine || ProjectManager == null)
             return null;
@@ -928,47 +901,45 @@ public partial class GanttChartControl : UserControl
         if (todayOffset < 0)
             return null;
 
-        // Получаем реальные размеры из других слоев
-        double actualWidth = GridLayer.ActualWidth > 0 ? GridLayer.ActualWidth : GridLayer.Width;
-        double actualHeight = GridLayer.ActualHeight > 0 ? GridLayer.ActualHeight : GridLayer.Height;
-
-        // Если все еще нулевые, используем расчетные размеры
-        if (actualWidth <= 0) actualWidth = GetChartEnd() - GetChartStart();
-        if (actualHeight <= 0) actualHeight = GetFullChartHeight();
-        
-        Debug.WriteLine($"TodayCanvas dimensions: {actualWidth}x{actualHeight}");
-
-        // Создаем Canvas с ЯВНО установленными размерами
-        var exportCanvas = new Canvas
-        {
-            Width = actualWidth,
-            Height = actualHeight,
-            Background = Brushes.Transparent
-        };
-
-        // Принудительно вызываем Measure и Arrange для установки Actual размеров
-        exportCanvas.Measure(new Size(actualWidth, actualHeight));
-        exportCanvas.Arrange(new Rect(0, 0, actualWidth, actualHeight));
-
         var x = todayOffset * ColumnWidth + ColumnWidth / 2;
 
-        // Создаем линию с явными координатами
-        var line = new Line
+        return new Line
         {
             X1 = x,
             Y1 = 0,
             X2 = x,
-            Y2 = actualHeight, // Используем установленную высоту
+            Y2 = canvasHeight,
             Stroke = FindResource("TodayLineBrush") as Brush ?? Brushes.Red,
             StrokeThickness = 2,
             StrokeDashArray = new DoubleCollection { 4, 2 },
             SnapsToDevicePixels = true
         };
-        
-        exportCanvas.Children.Add(line);
-    
-        Debug.WriteLine($"Created Today line: X1={x}, Y2={actualHeight}, ActualSize={exportCanvas.ActualWidth}x{exportCanvas.ActualHeight}");
+    }
 
+    private void RenderTodayLine()
+    {
+        TodayLayer.Children.Clear();
+
+        var line = CreateTodayLine(TodayLayer.ActualWidth, TodayLayer.ActualHeight);
+        TodayLayer.Children.Add(line);
+    }
+
+    private Canvas GetTodayLayerForExport()
+    {
+        var line = CreateTodayLine(GetChartEnd() - GetChartStart(), GetFullChartHeight());
+
+        var exportCanvas = new Canvas
+        {
+            Width = line.X2, // Используем реальные размеры
+            Height = line.Y2,
+            Background = Brushes.Transparent
+        };
+
+        // Принудительная установка размеров
+        exportCanvas.Measure(new Size(exportCanvas.Width, exportCanvas.Height));
+        exportCanvas.Arrange(new Rect(0, 0, exportCanvas.Width, exportCanvas.Height));
+
+        exportCanvas.Children.Add(line);
         return exportCanvas;
     }
 
