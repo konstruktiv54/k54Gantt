@@ -46,13 +46,13 @@ public static class XpsService
         fixedPage.Children.Add(headerClone);
 
         // 4. Добавляем gridCanvas, если есть (GridRenderer можно вызвать перед этим)
-        var gridClone = CloneCanvasAsVisual(gridCanvas);
+        var gridClone = CloneCanvasAsVisual(gridCanvas, 0, chartCanvas.ActualHeight-headerCanvas.ActualHeight);
         FixedPage.SetLeft(gridClone, 0);
         FixedPage.SetTop(gridClone, headerCanvas.ActualHeight); // отступ сверху равен высоте header
         fixedPage.Children.Add(gridClone);
         
         // 5. Размещаем chartCanvas под headerCanvas
-        var chartClone = CloneCanvasAsVisual(chartCanvas, chartWidth);
+        var chartClone = CloneCanvasAsVisual(chartCanvas, chartWidth, chartCanvas.ActualHeight-headerCanvas.ActualHeight );
         FixedPage.SetLeft(chartClone, chartStart);
         FixedPage.SetTop(chartClone, headerCanvas.ActualHeight);
         fixedPage.Children.Add(chartClone);
@@ -71,11 +71,10 @@ public static class XpsService
         }
     }
         
-    private static Canvas CloneCanvasAsVisual(Canvas source, double redWidth = 0)
+    private static Canvas CloneCanvasAsVisual(Canvas source, double redWidth = 0, double redHeight = 0)
     {
         var width = redWidth == 0 ? source.ActualWidth : redWidth;
-        
-        var height = source.ActualHeight;
+        var height = redHeight == 0 ? source.ActualHeight : redHeight;
 
         var canvasCopy = new Canvas
         {
