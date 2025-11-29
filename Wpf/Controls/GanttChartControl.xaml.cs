@@ -218,7 +218,7 @@ public partial class GanttChartControl : UserControl
         get => (bool)GetValue(HighlightWeekendsProperty);
         set => SetValue(HighlightWeekendsProperty, value);
     }
-
+ 
     #endregion
 
     #region Events
