@@ -992,7 +992,7 @@ public class ProjectManager<T, TR> : IProjectManager<T, TR>
 
         // allign the schedule
         if (duration <= TimeSpan.Zero || duration >= task.Duration)
-            duration = TimeSpan.FromTicks(task.Duration.Ticks / 2);
+            duration = TimeSpan.FromDays((int)(task.Duration.TotalDays / 2));
         part1.Start = task.Start;
         part1.End = task.End;
         part1.Duration = task.Duration;
@@ -1035,7 +1035,7 @@ public class ProjectManager<T, TR> : IProjectManager<T, TR>
 
         // limit the duration point within the split task duration
         if (duration <= TimeSpan.Zero || duration >= part.Duration)
-            duration = TimeSpan.FromTicks(part.Duration.Ticks / 2);
+            duration = TimeSpan.FromDays((int)(part.Duration.TotalDays / 2));
 
         // the real split
         var oneDuration = duration;
@@ -1230,48 +1230,46 @@ public class ProjectManager<T, TR> : IProjectManager<T, TR>
 
     private void _SetStartHelper(T task, TimeSpan value)
     {
-        if (task.Start != value)
+        if (task.Start == value) return;
+        // Округляем значение до целых дней
+        var wholeDays = (int)Math.Round(value.TotalDays);
+        value = TimeSpan.FromDays(wholeDays);
+
+        if (_mSplitTaskOfPart.ContainsKey(task))
         {
-            // Округляем значение до целых дней
-            int wholeDays = (int)Math.Round(value.TotalDays);
-            value = TimeSpan.FromDays(wholeDays);
-
-            if (_mSplitTaskOfPart.ContainsKey(task))
+            // task part belonging to a split task needs special treatment
+            _SetPartStartHelper(task, value);
+        }
+        else // regular task or a split task, which we will treat normally
+        {
+            // check out of bounds
+            if (value < TimeSpan.Zero) value = TimeSpan.Zero;
+            if (DirectPrecedentsOf(task).Any())
             {
-                // task part belonging to a split task needs special treatment
-                _SetPartStartHelper(task, value);
+                var maxEnd = DirectPrecedentsOf(task).Max(x => x.End);
+                if (value <= maxEnd) value = maxEnd; // + One;
             }
-            else // regular task or a split task, which we will treat normally
+
+            // save offset just in case we need to use for moving task parts
+            var offset = value - task.Start;
+
+            // cache value
+            task.Start = value;
+            // affect self
+            task.End = task.Start + task.Duration;
+            task.Duration = task.End - task.Start;
+
+            // calculate dependants
+            _RecalculateDependantsOf(task);
+
+            // shift the task parts accordingly if task was a split task
+            if (_mPartsOfSplitTask.ContainsKey(task))
             {
-                // check out of bounds
-                if (value < TimeSpan.Zero) value = TimeSpan.Zero;
-                if (DirectPrecedentsOf(task).Any())
+                _mPartsOfSplitTask[task].ForEach(x =>
                 {
-                    var maxEnd = DirectPrecedentsOf(task).Max(x => x.End);
-                    if (value <= maxEnd) value = maxEnd; // + One;
-                }
-
-                // save offset just in case we need to use for moving task parts
-                var offset = value - task.Start;
-
-                // cache value
-                task.Start = value;
-                // affect self
-                task.End = task.Start + task.Duration;
-                task.Duration = task.End - task.Start;
-
-                // calculate dependants
-                _RecalculateDependantsOf(task);
-
-                // shift the task parts accordingly if task was a split task
-                if (_mPartsOfSplitTask.ContainsKey(task))
-                {
-                    _mPartsOfSplitTask[task].ForEach(x =>
-                    {
-                        x.Start += offset;
-                        x.End += offset;
-                    });
-                }
+                    x.Start += offset;
+                    x.End += offset;
+                });
             }
         }
     }
@@ -1337,10 +1335,10 @@ public class ProjectManager<T, TR> : IProjectManager<T, TR>
                 if (isSplitTask)
                 {
                     lastPart = _mPartsOfSplitTask[task].Last();
-                    if (value <= lastPart.Start) value = lastPart.Start + TimeSpan.FromMinutes(30);
+                    if (value <= lastPart.Start) value = lastPart.Start + TimeSpan.FromDays(1); //тут было потеряно
                 }
-
-                if (value <= task.Start) value = task.Start + TimeSpan.FromMinutes(30);
+                
+                if (value <= task.Start) value = task.Start + TimeSpan.FromDays(1);
 
                 // УБРАНО: Логика сдвига Deadline
                 // End теперь может свободно пересекать Deadline
@@ -1373,7 +1371,7 @@ public class ProjectManager<T, TR> : IProjectManager<T, TR>
 
         if (deadline.HasValue)
         {
-            int wholeDays = (int)Math.Round(deadline.Value.TotalDays);
+            var wholeDays = (int)Math.Round(deadline.Value.TotalDays);
             var roundedDeadline = TimeSpan.FromDays(wholeDays);
 
             // Deadline не может быть раньше End
@@ -1441,7 +1439,7 @@ public class ProjectManager<T, TR> : IProjectManager<T, TR>
         var parts = _mPartsOfSplitTask[split];
 
         // check for bounds
-        if (value <= part.Start) value = part.Start + TimeSpan.FromMinutes(30);
+        if (value <= part.Start) value = part.Start + TimeSpan.FromDays(1);
 
         // flag whether duration is increased or reduced
         var increased = value > part.End;

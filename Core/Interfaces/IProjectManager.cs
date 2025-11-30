@@ -15,8 +15,8 @@ public class Task
     {
         Complete = 0.0f;
         Start = TimeSpan.Zero;
-        End = new TimeSpan(1, 0, 0, 0);
-        Duration = new TimeSpan(1, 0, 0, 0);
+        End =  TimeSpan.FromDays(1);
+        Duration = TimeSpan.FromDays(1);
         Slack = TimeSpan.Zero;
     }
         

@@ -113,14 +113,12 @@ public partial class TaskItemViewModel : ObservableObject
             var newStart = value - _projectStart;
             if (newStart < TimeSpan.Zero)
                 newStart = TimeSpan.Zero;
-
-            if (Task.Start != newStart)
-            {
-                _manager.SetStart(Task, newStart);
-                OnPropertyChanged();
-                OnPropertyChanged(nameof(EndDate));
-                _onTaskModified?.Invoke();
-            }
+            
+            if (Task.Start == newStart) return;
+            _manager.SetStart(Task, newStart);
+            OnPropertyChanged();
+            OnPropertyChanged(nameof(EndDate));
+            _onTaskModified?.Invoke();
         }
     }
 
@@ -140,13 +138,11 @@ public partial class TaskItemViewModel : ObservableObject
             if (value < 1) value = 1;
             var newDuration = TimeSpan.FromDays(value);
 
-            if (Task.Duration != newDuration)
-            {
-                _manager.SetDuration(Task, newDuration);
-                OnPropertyChanged();
-                OnPropertyChanged(nameof(EndDate));
-                _onTaskModified?.Invoke();
-            }
+            if (Task.Duration == newDuration) return;
+            _manager.SetDuration(Task, newDuration);
+            OnPropertyChanged();
+            OnPropertyChanged(nameof(EndDate));
+            _onTaskModified?.Invoke();
         }
     }
 
@@ -187,20 +183,18 @@ public partial class TaskItemViewModel : ObservableObject
                 var newDeadline = value.Value - _projectStart;
                 if (newDeadline < TimeSpan.Zero)
                     newDeadline = TimeSpan.Zero;
-
+                
                 // Deadline не может быть раньше End
                 if (newDeadline < Task.End)
                     newDeadline = Task.End;
 
-                if (Task.Deadline != newDeadline)
-                {
-                    _manager.SetDeadline(Task, newDeadline);
-                    OnPropertyChanged();
-                    OnPropertyChanged(nameof(HasDeadline));
-                    OnPropertyChanged(nameof(DaysUntilDeadline));
-                    OnPropertyChanged(nameof(IsOverdue));
-                    _onTaskModified?.Invoke();
-                }
+                if (Task.Deadline == newDeadline) return;
+                _manager.SetDeadline(Task, newDeadline);
+                OnPropertyChanged();
+                OnPropertyChanged(nameof(HasDeadline));
+                OnPropertyChanged(nameof(DaysUntilDeadline));
+                OnPropertyChanged(nameof(IsOverdue));
+                _onTaskModified?.Invoke();
             }
             else
             {
