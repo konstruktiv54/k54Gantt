@@ -352,7 +352,7 @@
                 <controls:GanttChartControl
                     x:Name="GanttChart"
                     ProjectManager="{Binding ProjectManager}"
-                    ZoomLevel="{Binding ZoomLevel}"
+                    ZoomLevel="{Binding ZoomLevel, Mode=TwoWay}"
                     SelectedTask="{Binding SelectedTask, Mode=TwoWay}"
                     ResourceService="{Binding ResourceService}"
                     TaskDoubleClicked="GanttChart_TaskDoubleClicked"

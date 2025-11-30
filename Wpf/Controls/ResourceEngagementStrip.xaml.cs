@@ -128,10 +128,8 @@ public partial class ResourceEngagementStrip : UserControl
     {
         if (d is ResourceEngagementStrip strip)
         {
-            strip.Dispatcher.BeginInvoke(() =>
-            {
-                strip.Refresh();
-            }, System.Windows.Threading.DispatcherPriority.Background);
+            // Render priority для немедленного отклика на зум
+            strip.Dispatcher.BeginInvoke(strip.Refresh, System.Windows.Threading.DispatcherPriority.Render);
         }
     }
 
@@ -167,7 +165,11 @@ public partial class ResourceEngagementStrip : UserControl
     /// </summary>
     public void Refresh()
     {
-        Debug.WriteLine($"Refresh called. ColumnWidth: {ColumnWidth}, ActualWidth: {ActualWidth}");
+        if (!IsLoaded)
+        {
+            return;
+        }
+    
         if (!Dispatcher.CheckAccess())
         {
             Dispatcher.BeginInvoke(new Action(Refresh));
@@ -186,8 +188,7 @@ public partial class ResourceEngagementStrip : UserControl
         // Определяем диапазон дней
         var (startDay, endDay) = GetVisibleDayRange();
         var totalDays = (int)(endDay - startDay).TotalDays + 1;
-
-        Debug.WriteLine($"EngagementStrip: startDay={startDay.TotalDays}, endDay={endDay.TotalDays}");
+        
         // Устанавливаем размер Canvas
         EngagementCanvas.Width = totalDays * ColumnWidth;
         EngagementCanvas.Height = resources.Count * RowHeight;

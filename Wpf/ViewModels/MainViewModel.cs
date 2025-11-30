@@ -58,8 +58,8 @@ public partial class MainViewModel : ObservableObject
 
     partial void OnZoomLevelChanged(int value)
     {
-        Debug.WriteLine($"ZoomLevel changed to: {value}, ColumnWidth: {ColumnWidth}");
-    
+        var newColumnWidth = 30.0 * value / 100.0;
+
         // Уведомляем об изменении ColumnWidth
         OnPropertyChanged(nameof(ColumnWidth));
     }
@@ -696,8 +696,6 @@ public partial class MainViewModel : ObservableObject
         }
 
         // Диагностика
-        System.Diagnostics.Debug.WriteLine($"=== BEFORE DELETE ===");
-        System.Diagnostics.Debug.WriteLine($"Tasks count: {ProjectManager.Tasks.Count}");
         foreach (var t in ProjectManager.Tasks)
         {
             System.Diagnostics.Debug.WriteLine($"  [{ProjectManager.IndexOf(t)}] {t.Name}");
@@ -706,8 +704,6 @@ public partial class MainViewModel : ObservableObject
         RebuildHierarchy();
         
         // Диагностика
-        System.Diagnostics.Debug.WriteLine($"=== AFTER DELETE ===");
-        System.Diagnostics.Debug.WriteLine($"Tasks count: {ProjectManager.Tasks.Count}");
         foreach (var t in ProjectManager.Tasks)
         {
             System.Diagnostics.Debug.WriteLine($"  [{ProjectManager.IndexOf(t)}] {t.Name}");

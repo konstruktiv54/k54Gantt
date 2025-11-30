@@ -118,7 +118,14 @@ public partial class MainWindow : Window
             // Связываем callbacks
             vm.ExportToPdfAction = GanttChart.ExportToXpsWithDialog;
         }
+        
+        // Синхронизация скролла
+        GanttChart.HorizontalScrollChanged += (_, offset) =>
+        {
+            EngagementStrip.HorizontalOffset = offset;
+        };
     }
+
     
     public void RefreshChart()
     {

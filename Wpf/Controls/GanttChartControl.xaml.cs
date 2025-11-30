@@ -268,6 +268,11 @@ public partial class GanttChartControl : UserControl
     #endregion
 
     #region Events
+    
+    /// <summary>
+    /// Событие изменения горизонтального скролла (для синхронизации с EngagementStrip).
+    /// </summary>
+    public event EventHandler<double>? HorizontalScrollChanged;
 
     /// <summary>
     /// Событие выбора задачи.
@@ -374,6 +379,7 @@ public partial class GanttChartControl : UserControl
     private void OnChartScrollChanged(object sender, ScrollChangedEventArgs e)
     {
         HeaderScrollViewer.ScrollToHorizontalOffset(e.HorizontalOffset);
+        HorizontalScrollChanged?.Invoke(this, e.HorizontalOffset);
     }
     
     private void OnPreviewMouseWheel(object sender, MouseWheelEventArgs e)
