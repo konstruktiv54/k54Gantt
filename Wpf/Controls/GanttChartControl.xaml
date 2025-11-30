@@ -17,7 +17,6 @@
             <!-- Область с задачами - скроллируемая -->
             <RowDefinition Height="*"/>
         </Grid.RowDefinitions>
-
         <!-- ═══════════════════════════════════════════════════════════════ -->
         <!-- HEADER (фиксированный)                                          -->
         <!-- ═══════════════════════════════════════════════════════════════ -->
@@ -53,11 +52,11 @@
                 <!-- Слой 1: Сетка и выходные дни (самый нижний) -->
                 <Canvas x:Name="GridLayer" Panel.ZIndex="0"/>
                 
-                <!-- Слой 2: Линия "Сегодня" -->
-                <Canvas x:Name="TodayLayer" Panel.ZIndex="1"/>
-                
                 <!-- Слой 3: Бары задач -->
-                <Canvas x:Name="TaskLayer" Panel.ZIndex="2"/>
+                <Canvas x:Name="TaskLayer" Panel.ZIndex="1"/>
+                
+                <!-- Слой 2: Линия "Сегодня" -->
+                <Canvas x:Name="TodayLayer" Panel.ZIndex="2"/>
                 
                 <!-- Слой 4: Линии связей -->
                 <Canvas x:Name="RelationLayer" Panel.ZIndex="3"/>

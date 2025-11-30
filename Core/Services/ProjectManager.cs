@@ -1340,7 +1340,10 @@ public class ProjectManager<T, TR> : IProjectManager<T, TR>
                     if (value <= lastPart.Start) value = lastPart.Start + TimeSpan.FromMinutes(30);
                 }
 
-                if (value <= task.Start) value = task.Start + TimeSpan.FromMinutes(30); // end cannot be less than start
+                if (value <= task.Start) value = task.Start + TimeSpan.FromMinutes(30);
+
+                // УБРАНО: Логика сдвига Deadline
+                // End теперь может свободно пересекать Deadline
 
                 // assign end value
                 task.End = value;
@@ -1354,6 +1357,47 @@ public class ProjectManager<T, TR> : IProjectManager<T, TR>
                     lastPart.Duration = lastPart.End - lastPart.Start;
                 }
             }
+        }
+    }
+    
+    /// <summary>
+    /// Устанавливает крайний срок (Deadline) для задачи.
+    /// Deadline не может быть раньше End.
+    /// </summary>
+    public void SetDeadline(T task, TimeSpan? deadline)
+    {
+        if (!_mRegister.Contains(task)) return;
+        
+        // Группы не имеют собственного deadline
+        if (IsGroup(task)) return;
+
+        if (deadline.HasValue)
+        {
+            int wholeDays = (int)Math.Round(deadline.Value.TotalDays);
+            var roundedDeadline = TimeSpan.FromDays(wholeDays);
+
+            // Deadline не может быть раньше End
+            if (roundedDeadline < task.End)
+            {
+                roundedDeadline = task.End;
+            }
+
+            task.Deadline = roundedDeadline;
+        }
+        else
+        {
+            task.Deadline = null;
+        }
+    }
+    
+    /// <summary>
+    /// Устанавливает заметку для задачи.
+    /// </summary>
+    public void SetNote(T task, string? note)
+    {
+        if (_mRegister.Contains(task))
+        {
+            task.Note = note;
         }
     }
 
@@ -1573,4 +1617,5 @@ public class ProjectManager<T, TR> : IProjectManager<T, TR>
             }
         }
     }
+    
 }

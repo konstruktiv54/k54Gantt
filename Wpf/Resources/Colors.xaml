@@ -26,7 +26,7 @@
 
     <!-- Gantt Chart специфичные -->
     <Color x:Key="TaskBarColor">#4682B4</Color>
-    <Color x:Key="TaskBarProgressColor">#2E5A7E</Color>
+    <Color x:Key="TaskBarProgressColor">#7ed77f</Color>
     <Color x:Key="TaskBarBorderColor">#3A6E9A</Color>
     <Color x:Key="GroupTaskColor">#333333</Color>
     <Color x:Key="MilestoneColor">#FF6600</Color>
@@ -40,6 +40,8 @@
     <Color x:Key="SuccessColor">#107C10</Color>
     <Color x:Key="WarningColor">#FF8C00</Color>
     <Color x:Key="ErrorColor">#D32F2F</Color>
+    <Color x:Key="TaskCompletedColor">#00aa25</Color>
+    <Color x:Key="TaskCompletedBorderColor">#009f19</Color>
 
     <!-- ═══════════════════════════════════════════════════════════════ -->
     <!-- КИСТИ (SolidColorBrush)                                         -->
@@ -79,5 +81,23 @@
     <SolidColorBrush x:Key="SuccessBrush" Color="{StaticResource SuccessColor}"/>
     <SolidColorBrush x:Key="WarningBrush" Color="{StaticResource WarningColor}"/>
     <SolidColorBrush x:Key="ErrorBrush" Color="{StaticResource ErrorColor}"/>
+    
+    <!-- Зелёный для завершённых задач (100%) -->
+    <SolidColorBrush x:Key="TaskCompletedBrush" Color="{StaticResource TaskCompletedColor}"/>
+    <SolidColorBrush x:Key="TaskCompletedBorderBrush" Color="{StaticResource TaskCompletedBorderColor}"/>
+    
+    <!-- Красный для дедлайна -->
+    <Color x:Key="DeadlineColor">#F44336</Color>
+    <Color x:Key="DeadlineGlowColor">#33F44336</Color>
+    <SolidColorBrush x:Key="DeadlineBrush" Color="{StaticResource DeadlineColor}"/>
+    <SolidColorBrush x:Key="DeadlineGlowBrush" Color="{StaticResource DeadlineGlowColor}"/>
+    
+    <!-- Цвет для просроченных задач -->
+    <Color x:Key="OverdueColor">#D32F2F</Color>
+    <SolidColorBrush x:Key="OverdueBrush" Color="{StaticResource OverdueColor}"/>
+    
+    <!-- Цвет для заметок -->
+    <Color x:Key="NoteTextColor">#757575</Color>
+    <SolidColorBrush x:Key="NoteTextBrush" Color="{StaticResource NoteTextColor}"/>
 
 </ResourceDictionary>

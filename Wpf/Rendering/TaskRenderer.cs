@@ -1,6 +1,7 @@
 // GanttChart.WPF/Rendering/TaskRenderer.cs
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Shapes;
 using Core.Services;
@@ -17,6 +18,12 @@ public class TaskRenderer
 {
     private readonly GanttChartControl _control;
     private ResourceService? _resourceService;
+    
+    // Ширина области для отображения ресурсов слева от бара
+    private const double ResourceAreaWidth = 80.0;
+    
+    // Отступ между областью ресурсов и баром
+    private const double ResourceGap = 4.0;
 
     // Кэшированные кисти
     private Brush? _taskBarBrush;
@@ -24,6 +31,9 @@ public class TaskRenderer
     private Brush? _taskBarBorderBrush;
     private Brush? _groupTaskBrush;
     private Brush? _textBrush;
+    private Brush? _taskCompletedBrush;      // Зелёный для 100%
+    private Brush? _deadlineBrush;           // Красный для deadline
+    private Brush? _noteBrush;               // Серый для заметок
 
     public TaskRenderer(GanttChartControl control)
     {
@@ -68,6 +78,12 @@ public class TaskRenderer
         _taskBarBorderBrush ??= _control.FindResource("TaskBarBorderBrush") as Brush ?? Brushes.DarkBlue;
         _groupTaskBrush ??= _control.FindResource("GroupTaskBrush") as Brush ?? Brushes.DimGray;
         _textBrush ??= Brushes.White;
+        
+        _taskCompletedBrush ??= _control.TryFindResource("TaskCompletedBrush") as Brush 
+                                ?? new SolidColorBrush(Color.FromRgb(76, 175, 80));  // Green 500
+        _deadlineBrush ??= _control.TryFindResource("DeadlineBrush") as Brush 
+                           ?? new SolidColorBrush(Color.FromRgb(244, 67, 54));       // Red 500
+        _noteBrush ??= _control.TryFindResource("TextSecondaryBrush") as Brush ?? Brushes.Gray;
     }
 
     private bool IsTaskHidden(Task task)
@@ -114,19 +130,35 @@ public class TaskRenderer
             RenderRegularTask(canvas, task, x, y, width, barHeight);
         }
 
-        // Имя задачи (справа от бара или внутри)
+        // Deadline (красная стена) — ПОСЛЕ бара, ПЕРЕД текстом
+        RenderDeadline(canvas, task, y, barHeight);
+
+        // Ресурсы СЛЕВА от бара
+        RenderTaskResources(canvas, task, x, y);
+
+        // Имя задачи справа от бара
         RenderTaskName(canvas, task, x, y, width, barHeight);
+        
+        // Заметка справа от имени — возвращает ширину текста имени
+        RenderTaskNote(canvas, task, x, y, width, barHeight);
     }
 
     private void RenderRegularTask(Canvas canvas, Task task, double x, double y, double width, double height)
     {
+        // Определяем цвет бара: зелёный для 100%, обычный для остальных
+        var isCompleted = task.Complete >= 1.0f;
+        var barBrush = isCompleted ? _taskCompletedBrush : _taskBarBrush;
+        var progressBrush = isCompleted ? _taskCompletedBrush : _taskBarProgressBrush;
+
         // Основной бар
         var taskBar = new Rectangle
         {
             Width = width,
             Height = height,
-            Fill = _taskBarBrush,
-            Stroke = _taskBarBorderBrush,
+            Fill = barBrush,
+            Stroke = isCompleted 
+                ? new SolidColorBrush(Color.FromRgb(56, 142, 60))  // Darker green border
+                : _taskBarBorderBrush,
             StrokeThickness = 1,
             RadiusX = 3,
             RadiusY = 3
@@ -136,8 +168,8 @@ public class TaskRenderer
         Canvas.SetTop(taskBar, y);
         canvas.Children.Add(taskBar);
 
-        // Прогресс
-        if (task.Complete > 0)
+        // Прогресс (только если НЕ 100%)
+        if (task.Complete > 0 && task.Complete < 1.0f)
         {
             var progressWidth = width * task.Complete;
 
@@ -145,7 +177,7 @@ public class TaskRenderer
             {
                 Width = Math.Max(progressWidth, 2),
                 Height = height,
-                Fill = _taskBarProgressBrush,
+                Fill = progressBrush,
                 RadiusX = 3,
                 RadiusY = 3,
                 Clip = new RectangleGeometry(new Rect(0, 0, progressWidth, height), 3, 3)
@@ -156,8 +188,25 @@ public class TaskRenderer
             canvas.Children.Add(progressBar);
         }
 
-        // Процент выполнения (внутри бара, если достаточно места)
-        if (width >= 40 && task.Complete > 0 && task.Complete < 1)
+        // Иконка галочки для 100% задач
+        if (isCompleted)
+        {
+            var checkMark = new TextBlock
+            {
+                Text = "✓",
+                FontSize = 12,
+                FontWeight = FontWeights.Bold,
+                Foreground = Brushes.White
+            };
+
+            checkMark.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
+            
+            Canvas.SetLeft(checkMark, x + (width - checkMark.DesiredSize.Width) / 2);
+            Canvas.SetTop(checkMark, y + (height - checkMark.DesiredSize.Height) / 2);
+            canvas.Children.Add(checkMark);
+        }
+        // Процент выполнения (внутри бара, если достаточно места и не 100%)
+        else if (width >= 40 && task.Complete > 0)
         {
             var percentText = new TextBlock
             {
@@ -177,21 +226,50 @@ public class TaskRenderer
 
     private void RenderGroupTask(Canvas canvas, Task task, double x, double y, double width, double height)
     {
-        // Групповая задача отображается как "скобка" с уголками
+        // Вычисляем прогресс групповой задачи на основе дочерних задач
+        float groupProgress = CalculateGroupProgress(task);
+        bool isCompleted = groupProgress >= 1.0f;
+
+        // Определяем цвет группы: зелёный для 100%, обычный для остальных
+        var groupBrush = isCompleted ? _taskCompletedBrush : _groupTaskBrush;
+        var progressBrush = isCompleted ? _taskCompletedBrush : _taskBarProgressBrush;
+
         var groupHeight = height * 0.4;
         var bracketHeight = height * 0.3;
 
-        // Основная линия
+        // Основная линия (фон)
         var mainLine = new Rectangle
         {
             Width = width,
             Height = groupHeight,
-            Fill = _groupTaskBrush
+            Fill = groupBrush,
+            RadiusX = 3,
+            RadiusY = 3
         };
 
         Canvas.SetLeft(mainLine, x);
         Canvas.SetTop(mainLine, y + (height - groupHeight) / 2);
         canvas.Children.Add(mainLine);
+
+        // Полоса прогресса (только если не 100%)
+        if (groupProgress > 0 && groupProgress < 1.0f)
+        {
+            var progressWidth = width * groupProgress;
+
+            var progressLine = new Rectangle
+            {
+                Width = Math.Max(progressWidth, 2),
+                Height = groupHeight,
+                Fill = progressBrush,
+                RadiusX = 3,
+                RadiusY = 3,
+                Clip = new RectangleGeometry(new Rect(0, 0, progressWidth, groupHeight), 3, 3)
+            };
+
+            Canvas.SetLeft(progressLine, x);
+            Canvas.SetTop(progressLine, y + (height - groupHeight) / 2);
+            canvas.Children.Add(progressLine);
+        }
 
         // Левая скобка (уголок вниз)
         var leftBracket = new Polygon
@@ -202,7 +280,7 @@ public class TaskRenderer
                 new Point(8, 0),
                 new Point(0, bracketHeight)
             },
-            Fill = _groupTaskBrush
+            Fill = groupBrush
         };
 
         Canvas.SetLeft(leftBracket, x);
@@ -218,14 +296,14 @@ public class TaskRenderer
                 new Point(0, 0),
                 new Point(8, bracketHeight)
             },
-            Fill = _groupTaskBrush
+            Fill = groupBrush
         };
 
         Canvas.SetLeft(rightBracket, x + width - 8);
         Canvas.SetTop(rightBracket, y + (height - groupHeight) / 2 + groupHeight);
         canvas.Children.Add(rightBracket);
 
-        // Иконка сворачивания (± )
+        // Иконка сворачивания (±)
         var collapseIcon = task.IsCollapsed ? "+" : "−";
         var iconText = new TextBlock
         {
@@ -239,6 +317,72 @@ public class TaskRenderer
         Canvas.SetLeft(iconText, x + 2);
         Canvas.SetTop(iconText, y + (height - iconText.DesiredSize.Height) / 2 - 2);
         canvas.Children.Add(iconText);
+
+        // Галочка для завершённых групп
+        if (isCompleted)
+        {
+            var checkMark = new TextBlock
+            {
+                Text = "✓",
+                FontSize = 12,
+                FontWeight = FontWeights.Bold,
+                Foreground = Brushes.White
+            };
+
+            checkMark.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
+            Canvas.SetLeft(checkMark, x + (width - checkMark.DesiredSize.Width) / 2);
+            Canvas.SetTop(checkMark, y + (height - checkMark.DesiredSize.Height) / 2);
+            canvas.Children.Add(checkMark);
+        }
+        // Процент выполнения для групп (если достаточно места)
+        else if (width >= 40 && groupProgress > 0)
+        {
+            var percentText = new TextBlock
+            {
+                Text = $"{(int)(groupProgress * 100)}%",
+                FontSize = 9,
+                Foreground = _textBrush,
+                FontWeight = FontWeights.SemiBold
+            };
+
+            percentText.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
+            Canvas.SetLeft(percentText, x + (width - percentText.DesiredSize.Width) / 2);
+            Canvas.SetTop(percentText, y + (height - percentText.DesiredSize.Height) / 2);
+            canvas.Children.Add(percentText);
+        }
+    }
+
+    /// <summary>
+    /// Вычисляет прогресс групповой задачи на основе дочерних задач.
+    /// </summary>
+    private float CalculateGroupProgress(Task groupTask)
+    {
+        if (_control.ProjectManager == null)
+            return 0f;
+        
+        var children = _control.ProjectManager.MembersOf(groupTask).ToList();
+        if (children.Count == 0)
+            return 0f;
+
+        // Вычисляем средний прогресс по всем дочерним задачам
+        float totalProgress = 0f;
+        int count = 0;
+
+        foreach (var child in children)
+        {
+            // Рекурсивно вычисляем прогресс для вложенных групп
+            if (_control.ProjectManager.IsGroup(child))
+            {
+                totalProgress += CalculateGroupProgress(child);
+            }
+            else
+            {
+                totalProgress += child.Complete;
+            }
+            count++;
+        }
+
+        return count > 0 ? totalProgress / count : 0f;
     }
 
     private void RenderSplitTask(Canvas canvas, Task splitTask, int rowIndex)
@@ -314,48 +458,22 @@ public class TaskRenderer
             }
         }
     }
-
-    private void RenderTaskName(Canvas canvas, Task task, double x, double y, double width, double height)
-    {
-        // Инициалы ресурсов НАД баром
-        RenderResourceInitials(canvas, task, x, y, width);
-
-        // Имя задачи справа от бара
-        var name = task.Name ?? "Без названия";
     
-        if (name.Length > 30)
-            name = name.Substring(0, 27) + "...";
-
-        var nameText = new TextBlock
-        {
-            Text = name,
-            FontSize = 11,
-            Foreground = _control.FindResource("TextPrimaryBrush") as Brush ?? Brushes.Black
-        };
-
-        nameText.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
-
-        var textX = x + width + 8;
-        var textY = y + (height - nameText.DesiredSize.Height) / 2;
-
-        Canvas.SetLeft(nameText, textX);
-        Canvas.SetTop(nameText, textY);
-        canvas.Children.Add(nameText);
-    }
-    
-    private void RenderResourceInitials(Canvas canvas, Task task, double x, double y, double width)
+    /// <summary>
+    /// Отрисовывает инициалы назначенных ресурсов слева от бара.
+    /// </summary>
+    private void RenderTaskResources(Canvas canvas, Task task, double x, double y)
     {
-        if (_resourceService == null)
-            return;
+        if (_resourceService == null) return;
 
         var initials = _resourceService.GetInitialsForTask(task.Id, ", ");
-    
-        if (string.IsNullOrEmpty(initials))
-            return;
+        if (string.IsNullOrEmpty(initials)) return;
 
         // Получаем ресурсы для определения цвета (берём цвет первого ресурса)
         var resources = _resourceService.GetResourcesForTask(task.Id).ToList();
-        Brush textBrush = _control.FindResource("TextSecondaryBrush") as Brush ?? Brushes.Gray;
+        
+        // Определяем цвет текста
+        Brush textBrush = _control.TryFindResource("TextSecondaryBrush") as Brush ?? Brushes.Gray;
 
         if (resources.Count > 0 && !string.IsNullOrEmpty(resources[0].ColorHex))
         {
@@ -370,26 +488,201 @@ public class TaskRenderer
             }
         }
 
-        var initialsText = new TextBlock
+        // Создаём TextBlock с выравниванием по правому краю
+        var resourceText = new TextBlock
         {
             Text = initials,
-            FontSize = 9,
+            FontSize = 10,
             FontWeight = FontWeights.SemiBold,
-            Foreground = textBrush
+            Foreground = textBrush,
+            TextAlignment = TextAlignment.Right,
+            Width = ResourceAreaWidth
         };
 
-        initialsText.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
+        // Позиционируем: правый край области ресурсов = левый край бара - отступ
+        var resourceX = x - ResourceGap - ResourceAreaWidth;
+        var resourceY = y + (_control.BarHeight - 14) / 2; // Центрируем по вертикали
 
-        // Позиционируем над баром по центру
-        var textX = x + (width - initialsText.DesiredSize.Width) / 2;
-        var textY = y - initialsText.DesiredSize.Height - 2;
+        // Если выходит за левую границу — корректируем
+        if (resourceX < 0)
+        {
+            resourceX = 2;
+            resourceText.Width = Math.Max(x - ResourceGap - 2, 0);
+            
+            // Если места совсем нет - не показываем
+            if (resourceText.Width < 20) return;
+        }
 
-        // Не показываем если выходит за верхнюю границу
-        if (textY < 0)
-            textY = y - 12; // Показываем чуть выше если места совсем мало
+        Canvas.SetLeft(resourceText, resourceX);
+        Canvas.SetTop(resourceText, resourceY);
 
-        Canvas.SetLeft(initialsText, Math.Max(x, textX));
-        Canvas.SetTop(initialsText, Math.Max(0, textY));
-        canvas.Children.Add(initialsText);
+        canvas.Children.Add(resourceText);
+    }
+
+    /// <summary>
+    /// Отрисовывает название задачи справа от бара.
+    /// </summary>
+    private void RenderTaskName(Canvas canvas, Task task, double x, double y, double width, double height)
+    {
+        // Определяем, является ли задача группой
+        var isGroup = _control.ProjectManager?.IsGroup(task) ?? false;
+        
+        // Имя задачи справа от бара
+        var name = task.Name ?? "Без названия";
+    
+        if (name.Length > 30)
+            name = name.Substring(0, 27) + "...";
+        
+        var nameText = new TextBlock
+        {
+            Text = name,
+            FontSize = isGroup ? 14 : 11, 
+            FontWeight = isGroup ? FontWeights.Bold : FontWeights.DemiBold,
+            Foreground = _control.TryFindResource("TextPrimaryBrush") as Brush ?? Brushes.Black
+        };
+
+        nameText.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
+
+        var textX = x + width + 8;
+        var textY = y + (height - nameText.DesiredSize.Height) / 2;
+
+        Canvas.SetLeft(nameText, textX);
+        Canvas.SetTop(nameText, textY);
+        canvas.Children.Add(nameText);
+    }
+    
+    /// <summary>
+    /// Отрисовывает красную "стену" deadline.
+    /// </summary>
+    private void RenderDeadline(Canvas canvas, Task task, double y, double barHeight)
+    {
+        if (!task.Deadline.HasValue) return;
+
+        var deadlineX = task.Deadline.Value.Days * _control.ColumnWidth;
+        
+        // Толщина "стены"
+        const double wallWidth = 3;
+        
+        // Высота стены = высота бара (НЕ выходит за строку)
+        var wallHeight = barHeight;
+        var wallY = y;
+
+        // Основная стена
+        var wall = new Rectangle
+        {
+            Width = wallWidth,
+            Height = wallHeight,
+            Fill = _deadlineBrush,
+            RadiusX = 1,
+            RadiusY = 1
+        };
+
+        Canvas.SetLeft(wall, deadlineX - wallWidth / 2);
+        Canvas.SetTop(wall, wallY);
+        canvas.Children.Add(wall);
+
+        // Маленький флажок (в пределах или чуть выше бара)
+        const double flagWidth = 6;
+        const double flagHeight = 4;
+
+        var flag = new Polygon
+        {
+            Points = new PointCollection
+            {
+                new Point(0, 0),
+                new Point(flagWidth, 0),
+                new Point(flagWidth, flagHeight * 0.7),
+                new Point(flagWidth / 2, flagHeight),
+                new Point(0, flagHeight * 0.7)
+            },
+            Fill = _deadlineBrush
+        };
+
+        // Флажок чуть выше бара, но в пределах barSpacing
+        Canvas.SetLeft(flag, deadlineX - flagWidth / 2);
+        Canvas.SetTop(flag, wallY - flagHeight);
+        canvas.Children.Add(flag);
+    }
+
+    /// <summary>
+    /// Отрисовывает заметку справа от названия задачи.
+    /// </summary>
+    /// <summary>
+    /// Отрисовывает заметку справа от названия задачи (свёрнутая версия).
+    /// </summary>
+    private void RenderTaskNote(Canvas canvas, Task task, double x, double y, double width, double barHeight)
+    {
+        if (string.IsNullOrWhiteSpace(task.Note)) return;
+
+        // Позиция после имени задачи
+        var nameWidth = EstimateTextWidth(task.Name ?? "Без названия", 11);
+        var noteX = x + width + 8 + nameWidth + 15;
+        var noteY = y + (barHeight - 16) / 2;
+
+        // Контейнер для заметки (кликабельная область)
+        var noteContainer = new Border
+        {
+            Background = new SolidColorBrush(Color.FromArgb(40, 255, 200, 100)), // Полупрозрачный жёлтый
+            BorderBrush = new SolidColorBrush(Color.FromRgb(200, 180, 100)),
+            BorderThickness = new Thickness(1),
+            CornerRadius = new CornerRadius(3),
+            Padding = new Thickness(4, 2, 4, 2),
+            Cursor = Cursors.Hand,
+            ToolTip = "Нажмите для редактирования"
+        };
+
+        // Контент: иконка + текст
+        var contentPanel = new StackPanel
+        {
+            Orientation = Orientation.Horizontal
+        };
+
+        // Иконка заметки
+        var noteIcon = new TextBlock
+        {
+            Text = "📝",
+            FontSize = 10,
+            Margin = new Thickness(0, 0, 4, 0),
+            VerticalAlignment = VerticalAlignment.Center
+        };
+        contentPanel.Children.Add(noteIcon);
+
+        // Текст заметки (обрезанный)
+        var noteText = task.Note
+            .Replace("\r\n", " ")
+            .Replace("\n", " ")
+            .Replace("\r", " ")
+            .Trim();
+
+        if (noteText.Length > 30)
+        {
+            noteText = noteText.Substring(0, 27) + "...";
+        }
+
+        var noteTextBlock = new TextBlock
+        {
+            Text = noteText,
+            FontSize = 10,
+            FontStyle = FontStyles.Italic,
+            Foreground = new SolidColorBrush(Color.FromRgb(100, 80, 40)),
+            MaxWidth = 150,
+            TextTrimming = TextTrimming.CharacterEllipsis,
+            VerticalAlignment = VerticalAlignment.Center
+        };
+        contentPanel.Children.Add(noteTextBlock);
+
+        noteContainer.Child = contentPanel;
+
+        Canvas.SetLeft(noteContainer, noteX);
+        Canvas.SetTop(noteContainer, noteY);
+        canvas.Children.Add(noteContainer);
+    }
+    
+    /// <summary>
+    /// Оценивает ширину текста в пикселях.
+    /// </summary>
+    private double EstimateTextWidth(string text, double fontSize)
+    {
+        return Math.Min(text.Length * fontSize * 0.55, 200);
     }
 }
