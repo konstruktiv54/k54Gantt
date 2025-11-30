@@ -44,6 +44,10 @@ public partial class App : Application
         // Core Services (Singleton - один экземпляр на всё приложение)
         services.AddSingleton<FileService>();
         services.AddSingleton<ResourceService>();
+        
+        // EngagementCalculationService — зависит от ResourceService,
+        // ProjectManager устанавливается позже через свойство
+        services.AddSingleton<EngagementCalculationService>();
 
         // ViewModels
         services.AddTransient<MainViewModel>();

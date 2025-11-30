@@ -23,6 +23,7 @@
         <converters:NotNullToBoolConverter x:Key="NotNullToBoolConverter"/>
         <converters:BoolToEditModeHeaderConverter x:Key="BoolToEditModeHeaderConverter"/>
         <converters:BoolToSaveAddConverter x:Key="BoolToSaveAddConverter"/>
+        <converters:EnumToDisplayNameConverter x:Key="EnumToDisplayNameConverter"/>
     </Window.Resources>
 
     <Grid Margin="16">
@@ -116,8 +117,15 @@
 
                 <!-- Роль -->
                 <TextBlock Text="Роль:" Margin="0,0,0,4"/>
-                <TextBox Text="{Binding EditRole, UpdateSourceTrigger=PropertyChanged}"
-                         Margin="0,0,0,12"/>
+                <ComboBox SelectedItem="{Binding EditRole}"
+                          ItemsSource="{Binding AvailableRoles}"
+                          Margin="0,0,0,12">
+                    <ComboBox.ItemTemplate>
+                        <DataTemplate>
+                            <TextBlock Text="{Binding Converter={StaticResource EnumToDisplayNameConverter}}"/>
+                        </DataTemplate>
+                    </ComboBox.ItemTemplate>
+                </ComboBox>
 
                 <!-- Цвет -->
                 <TextBlock Text="Цвет:" Margin="0,0,0,4"/>

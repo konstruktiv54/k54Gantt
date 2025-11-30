@@ -1,3 +1,4 @@
+using Core.Models;
 using Core.Services;
 
 namespace Core.Models.DTOs;
@@ -5,13 +6,28 @@ namespace Core.Models.DTOs;
 [Serializable]
 public class ProjectManagerData
 {
-    public string Now { get; set; }
+    public string Now { get; set; } = "0.00:00:00";
     public DateTime Start { get; set; }
-    public List<TaskData> Tasks { get; set; } = new List<TaskData>();
-    public List<SplitTaskRelation> SplitTasks { get; set; } = new List<SplitTaskRelation>();
-    public List<GroupRelation> GroupTasks { get; set; } = new List<GroupRelation>();
-    public List<ResourceData> Resources { get; set; } = new List<ResourceData>();
-    public List<ResourceAssignmentData> ResourceAssignments { get; set; } = new List<ResourceAssignmentData>();
+    public List<TaskData> Tasks { get; set; } = new();
+    public List<SplitTaskRelation> SplitTasks { get; set; } = new();
+    public List<GroupRelation> GroupTasks { get; set; } = new();
+    public List<ResourceData> Resources { get; set; } = new();
+    public List<ResourceAssignmentData> ResourceAssignments { get; set; } = new();
+
+    /// <summary>
+    /// Интервалы участия ресурсов (новое поле).
+    /// </summary>
+    public List<ParticipationIntervalData> ParticipationIntervals { get; set; } = new();
+
+    /// <summary>
+    /// Отсутствия ресурсов (новое поле).
+    /// </summary>
+    public List<AbsenceData> Absences { get; set; } = new();
+
+    /// <summary>
+    /// Версия формата данных для миграции.
+    /// </summary>
+    public int FormatVersion { get; set; } = 2;
 
     // Метод для преобразования в ProjectManager
     public ProjectManager<MyTask, object> ToProjectManager()
@@ -183,4 +199,3 @@ public class ProjectManagerData
         }
     }
 }
-// Вспомогательный метод для разбора нестандартных форматов TimeSpan

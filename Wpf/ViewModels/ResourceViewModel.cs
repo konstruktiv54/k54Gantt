@@ -46,7 +46,7 @@ public partial class ResourceViewModel : ObservableObject
     /// Роль нового/редактируемого ресурса.
     /// </summary>
     [ObservableProperty]
-    private string _editRole = string.Empty;
+    private ResourceRole _editRole = ResourceRole.Constructor;
 
     /// <summary>
     /// Цвет нового/редактируемого ресурса (HEX).
@@ -70,6 +70,11 @@ public partial class ResourceViewModel : ObservableObject
     /// ID редактируемого ресурса (для сохранения ссылки).
     /// </summary>
     private Guid _editingResourceId;
+    
+    /// <summary>
+    /// Доступные роли ресурсов для ComboBox.
+    /// </summary>
+    public ResourceRole[] AvailableRoles { get; } = Enum.GetValues<ResourceRole>();
 
     #endregion
 
@@ -103,7 +108,7 @@ public partial class ResourceViewModel : ObservableObject
             Initials = string.IsNullOrWhiteSpace(EditInitials) 
                 ? GenerateInitials(EditName) 
                 : EditInitials.Trim().ToUpper(),
-            Role = EditRole.Trim(),
+            Role = ResourceRole.Constructor,
             ColorHex = EditColorHex
         };
 
@@ -175,7 +180,7 @@ public partial class ResourceViewModel : ObservableObject
             resource.Initials = string.IsNullOrWhiteSpace(EditInitials)
                 ? GenerateInitials(EditName)
                 : EditInitials.Trim().ToUpper();
-            resource.Role = EditRole.Trim();
+            resource.Role = EditRole;
             resource.ColorHex = EditColorHex;
 
             _resourceService.UpdateResource(resource);
@@ -265,7 +270,7 @@ public partial class ResourceViewModel : ObservableObject
     {
         EditName = string.Empty;
         EditInitials = string.Empty;
-        EditRole = string.Empty;
+        EditRole = ResourceRole.Constructor;
         EditColorHex = "#4682B4";
         IsEditMode = false;
         _editingResourceId = Guid.Empty;

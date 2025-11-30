@@ -29,7 +29,7 @@ public partial class ResourceManagerDialog : Window
 
     private void ColorButton_Click(object sender, RoutedEventArgs e)
     {
-        if (sender is Button button && button.Background is SolidColorBrush brush)
+        if (sender is Button { Background: SolidColorBrush brush })
         {
             ViewModel.EditColorHex = brush.Color.ToString();
         }
