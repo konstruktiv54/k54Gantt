@@ -290,7 +290,7 @@
                                                             <DataTrigger Binding="{Binding IsGroup}" Value="True">
                                                                 <Setter Property="Kind" Value="FolderOutline"/>
                                                             </DataTrigger>
-                                                            <DataTrigger Binding="{Binding IsSplit}" Value="True">
+                                                            <DataTrigger Binding="{Binding IsSplitRoot}" Value="True">
                                                                 <Setter Property="Kind" Value="CallSplit"/>
                                                             </DataTrigger>
                                                         </Style.Triggers>
@@ -311,10 +311,7 @@
                             </DataGridTemplateColumn>
 
                             <!-- Начало -->
-                            <DataGridTextColumn Header="Начало" 
-                                                Binding="{Binding StartDay}" 
-                                                Width="60"
-                                                IsReadOnly="True"/>
+                            <DataGridTextColumn Header="Начало" Binding="{Binding Task.Start.Days}" Width="60"/>
 
                             <!-- Длительность -->
                             <DataGridTextColumn Header="Дней" 
@@ -333,10 +330,6 @@
                             </DataGridTemplateColumn>
 
                             <!-- Ресурсы -->
-                            <DataGridTextColumn Header="Ресурсы" 
-                                                Binding="{Binding ResourceInitials}" 
-                                                Width="70"
-                                                IsReadOnly="True"/>
                         </DataGrid.Columns>
                     </DataGrid>
                 </DockPanel>

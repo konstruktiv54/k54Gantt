@@ -187,6 +187,7 @@ public partial class ResourceEngagementStrip : UserControl
         var (startDay, endDay) = GetVisibleDayRange();
         var totalDays = (int)(endDay - startDay).TotalDays + 1;
 
+        Debug.WriteLine($"EngagementStrip: startDay={startDay.TotalDays}, endDay={endDay.TotalDays}");
         // Устанавливаем размер Canvas
         EngagementCanvas.Width = totalDays * ColumnWidth;
         EngagementCanvas.Height = resources.Count * RowHeight;

@@ -54,14 +54,7 @@ public partial class MainViewModel : ObservableObject
     [ObservableProperty]
     private EngagementCalculationService? _engagementService;
 
-    public double ColumnWidth 
-    {
-        get
-        {
-            var baseWidth = 30.0;
-            return baseWidth * ZoomLevel / 100.0;
-        }
-    }
+    public double ColumnWidth => 30.0 * ZoomLevel / 100.0;
 
     partial void OnZoomLevelChanged(int value)
     {
