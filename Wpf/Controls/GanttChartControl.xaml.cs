@@ -343,7 +343,7 @@ public partial class GanttChartControl : UserControl
     {
         if (d is GanttChartControl control)
         {
-            var baseWidth = 30.0;
+            var baseWidth = 30.0; // ДОЛЖНО БЫТЬ 30.0 как в MainViewModel
             control.ColumnWidth = baseWidth * control.ZoomLevel / 100.0;
         }
     }

@@ -1,8 +1,10 @@
 using System.Collections.ObjectModel;
+using System.Diagnostics;
 using System.Timers;
 using System.Windows;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using Core.Models;
 using Core.Services;
 using Microsoft.Win32;
 using Wpf.Controls;
@@ -39,7 +41,10 @@ public partial class MainViewModel : ObservableObject
     #endregion
 
     #region Observable Properties
-
+    
+    // Для ресурсов (прокси к ResourceService)
+    public IEnumerable<Resource> Resources => ResourceService?.Resources ?? Enumerable.Empty<Resource>();
+    
     [ObservableProperty]
     private string _projectName = "Новый проект";
     
@@ -49,10 +54,22 @@ public partial class MainViewModel : ObservableObject
     [ObservableProperty]
     private EngagementCalculationService? _engagementService;
 
-    /// <summary>
-    /// Ширина колонки (дня) на диаграмме — для синхронизации.
-    /// </summary>
-    public double ColumnWidth => ZoomLevel * 0.4; // Настрой коэффициент под твой ZoomLevel
+    public double ColumnWidth 
+    {
+        get
+        {
+            var baseWidth = 30.0;
+            return baseWidth * ZoomLevel / 100.0;
+        }
+    }
+
+    partial void OnZoomLevelChanged(int value)
+    {
+        Debug.WriteLine($"ZoomLevel changed to: {value}, ColumnWidth: {ColumnWidth}");
+    
+        // Уведомляем об изменении ColumnWidth
+        OnPropertyChanged(nameof(ColumnWidth));
+    }
     
     /// <summary>
     /// Менеджер проекта (содержит все задачи).
@@ -66,6 +83,12 @@ public partial class MainViewModel : ObservableObject
         {
             InitializeHierarchyBuilder();
             RebuildHierarchy();
+            
+            // Связываем с EngagementService
+            if (EngagementService != null)
+            {
+                EngagementService.ProjectManager = value;
+            }
         }
     }
 
@@ -92,6 +115,7 @@ public partial class MainViewModel : ObservableObject
     /// </summary>
     [ObservableProperty]
     private int _zoomLevel = 100;
+    
 
     /// <summary>
     /// Выбранная задача (Core.Task для GanttChart).
@@ -250,10 +274,14 @@ public partial class MainViewModel : ObservableObject
 
     #region Constructor
 
-    public MainViewModel(FileService fileService, ResourceService resourceService)
+    public MainViewModel(
+        FileService fileService, 
+        ResourceService resourceService,
+        EngagementCalculationService engagementService)
     {
         _fileService = fileService;
         _resourceService = resourceService;
+        _engagementService = engagementService;  // ← сохраняем
 
         // Связываем FileService с ResourceService
         _fileService.ResourceService = _resourceService;
@@ -272,8 +300,6 @@ public partial class MainViewModel : ObservableObject
 
         // Создаём новый проект по умолчанию
         CreateNewProject();
-
-        EngagementService?.ProjectManager = ProjectManager;
     }
 
     #endregion

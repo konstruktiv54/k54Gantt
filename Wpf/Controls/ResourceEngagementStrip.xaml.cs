@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
@@ -127,7 +128,10 @@ public partial class ResourceEngagementStrip : UserControl
     {
         if (d is ResourceEngagementStrip strip)
         {
-            strip.Refresh();
+            strip.Dispatcher.BeginInvoke(() =>
+            {
+                strip.Refresh();
+            }, System.Windows.Threading.DispatcherPriority.Background);
         }
     }
 
@@ -163,6 +167,13 @@ public partial class ResourceEngagementStrip : UserControl
     /// </summary>
     public void Refresh()
     {
+        Debug.WriteLine($"Refresh called. ColumnWidth: {ColumnWidth}, ActualWidth: {ActualWidth}");
+        if (!Dispatcher.CheckAccess())
+        {
+            Dispatcher.BeginInvoke(new Action(Refresh));
+            return;
+        }
+        
         EngagementCanvas.Children.Clear();
 
         if (ResourceService == null || ProjectManager == null)

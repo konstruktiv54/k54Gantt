@@ -259,8 +259,8 @@
 
                     <!-- DataGrid с задачами -->
                     <DataGrid x:Name="TasksDataGrid"
-                              ItemsSource="{Binding FlatTaskList}"
-                              SelectedItem="{Binding SelectedFlatTask, Mode=TwoWay}"
+                              ItemsSource="{Binding FlatTasks}"
+                              SelectedItem="{Binding SelectedTaskItem, Mode=TwoWay}"
                               AutoGenerateColumns="False"
                               CanUserAddRows="False"
                               CanUserDeleteRows="False"
@@ -466,7 +466,7 @@
                     ResourceService="{Binding ResourceService}"
                     EngagementService="{Binding EngagementService}"
                     ProjectManager="{Binding ProjectManager}"
-                    ColumnWidth="{Binding ColumnWidth}"
+                    ColumnWidth="{Binding ColumnWidth, Mode=OneWay}"
                     ShowResourceNames="False"/>
             </Border>
         </Grid>
