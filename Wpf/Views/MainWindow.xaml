@@ -212,140 +212,92 @@
             </StatusBarItem>
         </StatusBar>
 
-        <!-- ─────────────────────────────────────────────────────────── -->
-        <!-- MAIN CONTENT: Sidebar | Splitter | Chart                    -->
-        <!-- ─────────────────────────────────────────────────────────── -->
+<!-- ═══════════════════════════════════════════════════════════════ -->
+        <!-- ОСНОВНОЙ LAYOUT: 2 ряда × 3 колонки                             -->
+        <!-- ═══════════════════════════════════════════════════════════════ -->
         <Grid>
+            <Grid.RowDefinitions>
+                <RowDefinition Height="*"/>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="150" MinHeight="80" MaxHeight="300"/>
+            </Grid.RowDefinitions>
+            
             <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="280" MinWidth="200" MaxWidth="500"/>
+                <ColumnDefinition Width="350" MinWidth="200" MaxWidth="500"/>
                 <ColumnDefinition Width="Auto"/>
-                <ColumnDefinition Width="*" MinWidth="400"/>
+                <ColumnDefinition Width="*"/>
             </Grid.ColumnDefinitions>
 
-            <!-- SIDEBAR: TreeView + DataGrid -->
-            <Grid Grid.Column="0" Background="{StaticResource SidebarBackgroundBrush}">
-                <Grid.RowDefinitions>
-                    <RowDefinition Height="*" MinHeight="100" />
-                    <RowDefinition Height="Auto" />
-                    <RowDefinition Height="2*" MinHeight="150" />
-                </Grid.RowDefinitions>
+            <!-- ═══════════════════════════════════════════════════════════ -->
+            <!-- SIDEBAR: DataGrid с задачами (Row 0, Column 0)              -->
+            <!-- ═══════════════════════════════════════════════════════════ -->
+            <Border Grid.Row="0" Grid.Column="0"
+                    Background="{StaticResource SidebarBackgroundBrush}"
+                    BorderBrush="{StaticResource GridLineBrush}"
+                    BorderThickness="0,0,0,1">
+                <DockPanel>
+                    <!-- Toolbar -->
+                    <ToolBar DockPanel.Dock="Top" Style="{StaticResource SidebarToolbarStyle}">
+                        <Button Command="{Binding AddTaskCommand}" ToolTip="Добавить задачу (Ctrl+T)">
+                            <icon:MaterialIcon Kind="Plus" Width="18" Height="18"/>
+                        </Button>
+                        <Button Command="{Binding AddSubtaskCommand}" ToolTip="Добавить подзадачу (Ctrl+Shift+T)">
+                            <icon:MaterialIcon Kind="SubdirectoryArrowRight" Width="18" Height="18"/>
+                        </Button>
+                        <Separator/>
+                        <Button Command="{Binding MakeGroupCommand}" ToolTip="Создать группу (Ctrl+G)">
+                            <icon:MaterialIcon Kind="FolderPlus" Width="18" Height="18"/>
+                        </Button>
+                        <Button Command="{Binding UngroupCommand}" ToolTip="Разгруппировать (Ctrl+Shift+G)">
+                            <icon:MaterialIcon Kind="FolderRemove" Width="18" Height="18"/>
+                        </Button>
+                        <Separator/>
+                        <Button Command="{Binding DeleteTaskCommand}" ToolTip="Удалить (Delete)">
+                            <icon:MaterialIcon Kind="Delete" Width="18" Height="18" Foreground="#D32F2F"/>
+                        </Button>
+                    </ToolBar>
 
-                <!-- TreeView (иерархия задач) -->
-                <DockPanel Grid.Row="0">
-                    <TextBlock DockPanel.Dock="Top"
-                               Text="Структура проекта"
-                               FontWeight="SemiBold"
-                               Margin="8,8,8,4" />
-                    <TreeView x:Name="TaskTreeView"
-                              Style="{StaticResource TaskTreeViewStyle}"
-                              ItemsSource="{Binding RootTasks}"
-                              SelectedItemChanged="TaskTreeView_SelectedItemChanged"
-                              ContextMenu="{StaticResource TaskContextMenu}"
-                              Margin="4">
-                        <TreeView.ItemContainerStyle>
-                            <Style TargetType="TreeViewItem">
-                                <Setter Property="IsExpanded" Value="{Binding IsExpanded, Mode=TwoWay}" />
-                                <Setter Property="IsSelected" Value="{Binding IsSelected, Mode=TwoWay}" />
-                                <Setter Property="Padding" Value="2" />
-                            </Style>
-                        </TreeView.ItemContainerStyle>
-                        <TreeView.ItemTemplate>
-                            <HierarchicalDataTemplate ItemsSource="{Binding Children}">
-                                <Border Background="Transparent"
-                                        MouseLeftButtonDown="TreeViewItem_MouseLeftButtonDown"
-                                        ToolTip="{Binding ToolTip}">
-                                    <Grid>
-                                        <Grid.ColumnDefinitions>
-                                            <ColumnDefinition Width="Auto" />
-                                            <ColumnDefinition Width="*" />
-                                            <ColumnDefinition Width="Auto" />
-                                            <ColumnDefinition Width="Auto" />
-                                        </Grid.ColumnDefinitions>
-
-                                        <!-- Иконка -->
-                                        <icon:MaterialIcon Grid.Column="0"
-                                                           Kind="{Binding IconKind}"
-                                                           Width="16" Height="16"
-                                                           Margin="0,0,6,0"
-                                                           Foreground="{StaticResource TextSecondaryBrush}" />
-
-                                        <!-- Имя задачи -->
-                                        <TextBlock Grid.Column="1"
-                                                   Text="{Binding Name}"
-                                                   VerticalAlignment="Center" />
-
-                                        <!-- Индикатор заметки -->
-                                        <icon:MaterialIcon Grid.Column="2"
-                                                           Kind="NoteText"
-                                                           Width="12" Height="12"
-                                                           Margin="4,0,0,0"
-                                                           Foreground="{StaticResource TextSecondaryBrush}"
-                                                           Visibility="{Binding HasNote, Converter={StaticResource BoolToVisibilityConverter}}"
-                                                           ToolTip="{Binding NotePreview}" />
-
-                                        <!-- Toggle для split-частей -->
-                                        <Button Grid.Column="3"
-                                                Visibility="{Binding IsSplitRoot, Converter={StaticResource IsSplitToVisibilityConverter}}"
-                                                Command="{Binding ToggleShowPartsCommand}"
-                                                ToolTip="Показать/скрыть части"
-                                                Background="Transparent"
-                                                BorderThickness="0"
-                                                Padding="2"
-                                                Margin="4,0,0,0">
-                                            <icon:MaterialIcon Width="14" Height="14"
+                    <!-- DataGrid с задачами -->
+                    <DataGrid x:Name="TasksDataGrid"
+                              ItemsSource="{Binding FlatTaskList}"
+                              SelectedItem="{Binding SelectedFlatTask, Mode=TwoWay}"
+                              AutoGenerateColumns="False"
+                              CanUserAddRows="False"
+                              CanUserDeleteRows="False"
+                              SelectionMode="Single"
+                              SelectionUnit="FullRow"
+                              GridLinesVisibility="Horizontal"
+                              HorizontalGridLinesBrush="{StaticResource GridLineBrush}"
+                              Background="{StaticResource SidebarBackgroundBrush}"
+                              RowHeight="28"
+                              HeadersVisibility="Column"
+                              ContextMenu="{StaticResource TaskContextMenu}">
+                        
+                        <DataGrid.Columns>
+                            <!-- Имя задачи с отступом по уровню -->
+                            <DataGridTemplateColumn Header="Задача" Width="*" MinWidth="150">
+                                <DataGridTemplateColumn.CellTemplate>
+                                    <DataTemplate>
+                                        <StackPanel Orientation="Horizontal"
+                                                    Margin="{Binding Level, Converter={StaticResource LevelToMarginConverter}}">
+                                            <!-- Иконка группы/задачи -->
+                                            <icon:MaterialIcon Width="16" Height="16" Margin="0,0,4,0"
                                                                Foreground="{StaticResource TextSecondaryBrush}">
                                                 <icon:MaterialIcon.Style>
                                                     <Style TargetType="icon:MaterialIcon">
-                                                        <Setter Property="Kind" Value="ChevronRight" />
+                                                        <Setter Property="Kind" Value="CheckboxBlankCircleOutline"/>
                                                         <Style.Triggers>
-                                                            <DataTrigger Binding="{Binding ShowParts}" Value="True">
-                                                                <Setter Property="Kind" Value="ChevronDown" />
+                                                            <DataTrigger Binding="{Binding IsGroup}" Value="True">
+                                                                <Setter Property="Kind" Value="FolderOutline"/>
+                                                            </DataTrigger>
+                                                            <DataTrigger Binding="{Binding IsSplit}" Value="True">
+                                                                <Setter Property="Kind" Value="CallSplit"/>
                                                             </DataTrigger>
                                                         </Style.Triggers>
                                                     </Style>
                                                 </icon:MaterialIcon.Style>
                                             </icon:MaterialIcon>
-                                        </Button>
-                                    </Grid>
-                                </Border>
-                            </HierarchicalDataTemplate>
-                        </TreeView.ItemTemplate>
-                    </TreeView>
-                </DockPanel>
-
-                <!-- Горизонтальный splitter -->
-                <GridSplitter Grid.Row="1"
-                              Height="5"
-                              HorizontalAlignment="Stretch"
-                              Background="{StaticResource GridLineBrush}"
-                              Cursor="SizeNS" />
-
-                <!-- DataGrid (таблица задач) -->
-                <DockPanel Grid.Row="2">
-                    <TextBlock DockPanel.Dock="Top"
-                               Text="Список задач"
-                               FontWeight="SemiBold"
-                               Margin="8,8,8,4" />
-                    <DataGrid x:Name="TaskDataGrid"
-                              Style="{StaticResource TaskDataGridStyle}"
-                              ItemsSource="{Binding FlatTasks}"
-                              SelectedItem="{Binding SelectedTaskItem, Mode=TwoWay}"
-                              ContextMenu="{StaticResource TaskContextMenu}"
-                              Margin="4">
-                        <DataGrid.Columns>
-                            <!-- Название с иконкой и отступом -->
-                            <DataGridTemplateColumn Header="Название" Width="*" MinWidth="120">
-                                <DataGridTemplateColumn.CellTemplate>
-                                    <DataTemplate>
-                                        <StackPanel Orientation="Horizontal"
-                                                    Margin="{Binding Level, Converter={StaticResource LevelToMarginConverter}}">
-                                            <icon:MaterialIcon Kind="{Binding IconKind}"
-                                                               Width="14" Height="14"
-                                                               Margin="0,0,4,0"
-                                                               Foreground="{StaticResource TextSecondaryBrush}"
-                                                               VerticalAlignment="Center" />
-                                            <TextBlock Text="{Binding Name}"
-                                                       VerticalAlignment="Center" />
+                                            <TextBlock Text="{Binding Name}" VerticalAlignment="Center"/>
                                         </StackPanel>
                                     </DataTemplate>
                                 </DataGridTemplateColumn.CellTemplate>
@@ -353,192 +305,56 @@
                                     <DataTemplate>
                                         <TextBox Text="{Binding Name, UpdateSourceTrigger=PropertyChanged}"
                                                  Margin="{Binding Level, Converter={StaticResource LevelToMarginConverter}}"
-                                                 BorderThickness="0"
-                                                 Padding="0" />
+                                                 BorderThickness="0" Padding="20,0,0,0"/>
                                     </DataTemplate>
                                 </DataGridTemplateColumn.CellEditingTemplate>
                             </DataGridTemplateColumn>
 
-                            <!-- Дата начала -->
-                            <DataGridTemplateColumn Header="Начало" Width="90">
-                                <DataGridTemplateColumn.CellTemplate>
-                                    <DataTemplate>
-                                        <TextBlock Text="{Binding StartDate, StringFormat=dd.MM.yyyy}"
-                                                   HorizontalAlignment="Center" />
-                                    </DataTemplate>
-                                </DataGridTemplateColumn.CellTemplate>
-                                <DataGridTemplateColumn.CellEditingTemplate>
-                                    <DataTemplate>
-                                        <DatePicker
-                                            SelectedDate="{Binding StartDate, UpdateSourceTrigger=PropertyChanged}"
-                                            BorderThickness="0" />
-                                    </DataTemplate>
-                                </DataGridTemplateColumn.CellEditingTemplate>
-                            </DataGridTemplateColumn>
+                            <!-- Начало -->
+                            <DataGridTextColumn Header="Начало" 
+                                                Binding="{Binding StartDay}" 
+                                                Width="60"
+                                                IsReadOnly="True"/>
 
                             <!-- Длительность -->
-                            <DataGridTemplateColumn Header="Дни" Width="45">
+                            <DataGridTextColumn Header="Дней" 
+                                                Binding="{Binding DurationDays}" 
+                                                Width="50"
+                                                IsReadOnly="True"/>
+
+                            <!-- Прогресс -->
+                            <DataGridTemplateColumn Header="%" Width="50">
                                 <DataGridTemplateColumn.CellTemplate>
                                     <DataTemplate>
-                                        <TextBlock Text="{Binding DurationDays}"
-                                                   HorizontalAlignment="Center" />
+                                        <TextBlock Text="{Binding CompletePercent, StringFormat={}{0}%}"
+                                                   HorizontalAlignment="Center"/>
                                     </DataTemplate>
                                 </DataGridTemplateColumn.CellTemplate>
-                                <DataGridTemplateColumn.CellEditingTemplate>
-                                    <DataTemplate>
-                                        <TextBox Text="{Binding DurationDays, UpdateSourceTrigger=PropertyChanged}"
-                                                 BorderThickness="0"
-                                                 HorizontalContentAlignment="Center" />
-                                    </DataTemplate>
-                                </DataGridTemplateColumn.CellEditingTemplate>
                             </DataGridTemplateColumn>
 
-                            <!-- Процент выполнения -->
-                            <DataGridTemplateColumn Header="%" Width="55">
-                                <DataGridTemplateColumn.CellTemplate>
-                                    <DataTemplate>
-                                        <Grid>
-                                            <ProgressBar Value="{Binding CompletePercent, Mode=OneWay}"
-                                                         Maximum="100"
-                                                         Height="14"
-                                                         Foreground="{StaticResource AccentBrush}"
-                                                         Background="{StaticResource GridLineBrush}" />
-                                            <TextBlock Text="{Binding CompletePercent, StringFormat={}{0}%}"
-                                                       HorizontalAlignment="Center"
-                                                       VerticalAlignment="Center"
-                                                       FontSize="10" />
-                                        </Grid>
-                                    </DataTemplate>
-                                </DataGridTemplateColumn.CellTemplate>
-                                <DataGridTemplateColumn.CellEditingTemplate>
-                                    <DataTemplate>
-                                        <Slider Value="{Binding CompletePercent, UpdateSourceTrigger=PropertyChanged}"
-                                                Minimum="0"
-                                                Maximum="100"
-                                                TickFrequency="10"
-                                                IsSnapToTickEnabled="True" />
-                                    </DataTemplate>
-                                </DataGridTemplateColumn.CellEditingTemplate>
-                            </DataGridTemplateColumn>
-
-                            <!-- НОВОЕ: Deadline -->
-                            <DataGridTemplateColumn Header="Дедлайн" Width="90">
-                                <DataGridTemplateColumn.CellTemplate>
-                                    <DataTemplate>
-                                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
-                                            <!-- Иконка предупреждения если просрочено -->
-                                            <icon:MaterialIcon Kind="AlertCircle"
-                                                               Width="12" Height="12"
-                                                               Margin="0,0,2,0"
-                                                               Foreground="#D32F2F"
-                                                               Visibility="{Binding IsOverdue, Converter={StaticResource BoolToVisibilityConverter}}"
-                                                               ToolTip="Просрочено!" />
-                                            <TextBlock Text="{Binding DeadlineDate, StringFormat=dd.MM.yyyy}"
-                                                       Visibility="{Binding HasDeadline, Converter={StaticResource BoolToVisibilityConverter}}"
-                                                       Foreground="{Binding IsOverdue, Converter={StaticResource BoolToOverdueColorConverter}}" />
-                                            <TextBlock Text="—"
-                                                       Visibility="{Binding HasDeadline, Converter={StaticResource BoolToVisibilityConverter}, ConverterParameter=Inverse}"
-                                                       Foreground="{StaticResource TextSecondaryBrush}" />
-                                        </StackPanel>
-                                    </DataTemplate>
-                                </DataGridTemplateColumn.CellTemplate>
-                                <DataGridTemplateColumn.CellEditingTemplate>
-                                    <DataTemplate>
-                                        <DatePicker
-                                            SelectedDate="{Binding DeadlineDate, UpdateSourceTrigger=PropertyChanged}"
-                                            BorderThickness="0" />
-                                    </DataTemplate>
-                                </DataGridTemplateColumn.CellEditingTemplate>
-                            </DataGridTemplateColumn>
-
-                            <!-- НОВОЕ: Заметка с collapse -->
-                            <DataGridTemplateColumn Header="Заметка" Width="200" MinWidth="100">
-                                <DataGridTemplateColumn.CellTemplate>
-                                    <DataTemplate>
-                                        <Grid
-                                            Visibility="{Binding HasNote, Converter={StaticResource BoolToVisibilityConverter}}">
-                                            <Grid.ColumnDefinitions>
-                                                <ColumnDefinition Width="Auto" />
-                                                <ColumnDefinition Width="*" />
-                                            </Grid.ColumnDefinitions>
-
-                                            <!-- Кнопка развернуть/свернуть -->
-                                            <Button Grid.Column="0"
-                                                    Command="{Binding ToggleNoteExpandedCommand}"
-                                                    Background="Transparent"
-                                                    BorderThickness="0"
-                                                    Padding="2"
-                                                    Cursor="Hand"
-                                                    VerticalAlignment="Top">
-                                                <icon:MaterialIcon Width="12" Height="12"
-                                                                   Foreground="{StaticResource TextSecondaryBrush}">
-                                                    <icon:MaterialIcon.Style>
-                                                        <Style TargetType="icon:MaterialIcon">
-                                                            <Setter Property="Kind" Value="ChevronRight" />
-                                                            <Style.Triggers>
-                                                                <DataTrigger Binding="{Binding IsNoteExpanded}"
-                                                                             Value="True">
-                                                                    <Setter Property="Kind" Value="ChevronDown" />
-                                                                </DataTrigger>
-                                                            </Style.Triggers>
-                                                        </Style>
-                                                    </icon:MaterialIcon.Style>
-                                                </icon:MaterialIcon>
-                                            </Button>
-
-                                            <!-- Текст заметки -->
-                                            <TextBlock Grid.Column="1"
-                                                       Margin="2,0,0,0"
-                                                       FontSize="11"
-                                                       Foreground="{StaticResource TextSecondaryBrush}"
-                                                       TextWrapping="NoWrap"
-                                                       TextTrimming="CharacterEllipsis"
-                                                       VerticalAlignment="Center">
-                                                <TextBlock.Style>
-                                                    <Style TargetType="TextBlock">
-                                                        <Setter Property="Text" Value="{Binding NotePreview}" />
-                                                        <Setter Property="TextWrapping" Value="NoWrap" />
-                                                        <Setter Property="MaxHeight" Value="20" />
-                                                        <Style.Triggers>
-                                                            <DataTrigger Binding="{Binding IsNoteExpanded}"
-                                                                         Value="True">
-                                                                <Setter Property="Text" Value="{Binding Note}" />
-                                                                <Setter Property="TextWrapping" Value="Wrap" />
-                                                                <Setter Property="MaxHeight" Value="100" />
-                                                            </DataTrigger>
-                                                        </Style.Triggers>
-                                                    </Style>
-                                                </TextBlock.Style>
-                                            </TextBlock>
-                                        </Grid>
-                                    </DataTemplate>
-                                </DataGridTemplateColumn.CellTemplate>
-                                <DataGridTemplateColumn.CellEditingTemplate>
-                                    <DataTemplate>
-                                        <TextBox Text="{Binding Note, UpdateSourceTrigger=PropertyChanged}"
-                                                 TextWrapping="Wrap"
-                                                 AcceptsReturn="True"
-                                                 MaxHeight="100"
-                                                 VerticalScrollBarVisibility="Auto"
-                                                 BorderThickness="0"
-                                                 Padding="2" />
-                                    </DataTemplate>
-                                </DataGridTemplateColumn.CellEditingTemplate>
-                            </DataGridTemplateColumn>
+                            <!-- Ресурсы -->
+                            <DataGridTextColumn Header="Ресурсы" 
+                                                Binding="{Binding ResourceInitials}" 
+                                                Width="70"
+                                                IsReadOnly="True"/>
                         </DataGrid.Columns>
-
                     </DataGrid>
                 </DockPanel>
-            </Grid>
+            </Border>
 
-            <!-- SPLITTER -->
-            <GridSplitter Grid.Column="1" Style="{StaticResource VerticalSplitterStyle}"/>
+            <!-- ═══════════════════════════════════════════════════════════ -->
+            <!-- VERTICAL SPLITTER (Row 0, Column 1)                         -->
+            <!-- ═══════════════════════════════════════════════════════════ -->
+            <GridSplitter Grid.Row="0" Grid.RowSpan="3" Grid.Column="1" 
+                          Style="{StaticResource VerticalSplitterStyle}"/>
 
-            <!-- CHART AREA -->
-            <Border Grid.Column="2" 
+            <!-- ═══════════════════════════════════════════════════════════ -->
+            <!-- GANTT CHART (Row 0, Column 2)                               -->
+            <!-- ═══════════════════════════════════════════════════════════ -->
+            <Border Grid.Row="0" Grid.Column="2"
                     Background="{StaticResource BackgroundBrush}"
                     BorderBrush="{StaticResource GridLineBrush}"
-                    BorderThickness="1,0,0,0">
+                    BorderThickness="0,0,0,1">
 
                 <controls:GanttChartControl
                     x:Name="GanttChart"
@@ -550,32 +366,108 @@
                     Tag="{Binding}">
                     <controls:GanttChartControl.ContextMenu>
                         <ContextMenu DataContext="{Binding PlacementTarget.Tag, RelativeSource={RelativeSource Self}}">
-                            <MenuItem Header="Добавить задачу" Command="{Binding AddTaskCommand}" />
-                            <MenuItem Header="Добавить подзадачу" Command="{Binding AddSubtaskCommand}" />
-                            <Separator />
-                            <MenuItem Header="Создать группу" Command="{Binding MakeGroupCommand}" />
+                            <MenuItem Header="Добавить задачу" Command="{Binding AddTaskCommand}"/>
+                            <MenuItem Header="Добавить подзадачу" Command="{Binding AddSubtaskCommand}"/>
+                            <Separator/>
+                            <MenuItem Header="Создать группу" Command="{Binding MakeGroupCommand}"/>
                             <MenuItem Header="Добавить в группу..."
                                       ItemsSource="{Binding AvailableGroups}"
                                       IsEnabled="{Binding AvailableGroups.Count, Converter={StaticResource CountToBoolConverter}}">
                                 <MenuItem.ItemContainerStyle>
                                     <Style TargetType="MenuItem">
-                                        <Setter Property="Header" Value="{Binding Name}" />
+                                        <Setter Property="Header" Value="{Binding Name}"/>
                                         <Setter Property="Command"
                                                 Value="{Binding DataContext.AddToGroupCommand, 
-                            RelativeSource={RelativeSource AncestorType=ContextMenu}}" />
-                                        <Setter Property="CommandParameter" Value="{Binding}" />
+                                                    RelativeSource={RelativeSource AncestorType=ContextMenu}}"/>
+                                        <Setter Property="CommandParameter" Value="{Binding}"/>
                                     </Style>
                                 </MenuItem.ItemContainerStyle>
                             </MenuItem>
-                            <MenuItem Header="Убрать из группы" Command="{Binding RemoveFromGroupCommand}" />
-                            <MenuItem Header="Разгруппировать" Command="{Binding UngroupCommand}" />
-                            <Separator />
-                            <MenuItem Header="Назначить ресурсы..." Command="{Binding AssignResourcesCommand}" />
-                            <Separator />
-                            <MenuItem Header="Удалить" Command="{Binding DeleteTaskCommand}" Foreground="#D32F2F" />
+                            <MenuItem Header="Убрать из группы" Command="{Binding RemoveFromGroupCommand}"/>
+                            <MenuItem Header="Разгруппировать" Command="{Binding UngroupCommand}"/>
+                            <Separator/>
+                            <MenuItem Header="Назначить ресурсы..." Command="{Binding AssignResourcesCommand}"/>
+                            <Separator/>
+                            <MenuItem Header="Удалить" Command="{Binding DeleteTaskCommand}" Foreground="#D32F2F"/>
                         </ContextMenu>
                     </controls:GanttChartControl.ContextMenu>
                 </controls:GanttChartControl>
+            </Border>
+
+            <!-- ═══════════════════════════════════════════════════════════ -->
+            <!-- HORIZONTAL SPLITTER (Row 1, spans all columns)              -->
+            <!-- ═══════════════════════════════════════════════════════════ -->
+            <GridSplitter Grid.Row="1" Grid.Column="0" Grid.ColumnSpan="3"
+                          Height="5"
+                          HorizontalAlignment="Stretch"
+                          VerticalAlignment="Center"
+                          Background="{StaticResource GridLineBrush}"
+                          ResizeDirection="Rows"
+                          Cursor="SizeNS"/>
+
+            <!-- ═══════════════════════════════════════════════════════════ -->
+            <!-- RESOURCE NAMES (Row 2, Column 0)                            -->
+            <!-- ═══════════════════════════════════════════════════════════ -->
+            <Border Grid.Row="2" Grid.Column="0"
+                    Background="{StaticResource SidebarBackgroundBrush}"
+                    BorderBrush="{StaticResource GridLineBrush}"
+                    BorderThickness="0">
+                <ScrollViewer x:Name="ResourceNamesScrollViewer"
+                              VerticalScrollBarVisibility="Hidden"
+                              HorizontalScrollBarVisibility="Disabled">
+                    <ItemsControl ItemsSource="{Binding ResourceService.Resources}">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                                <Border Height="24" 
+                                        BorderBrush="{StaticResource GridLineBrush}"
+                                        BorderThickness="0,0,0,1"
+                                        Padding="8,0"
+                                        Background="{StaticResource SidebarBackgroundBrush}">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="Auto"/>
+                                            <ColumnDefinition Width="*"/>
+                                        </Grid.ColumnDefinitions>
+                                        
+                                        <!-- Цветовой индикатор -->
+                                        <Border Grid.Column="0" 
+                                                Width="12" Height="12" 
+                                                CornerRadius="2"
+                                                Margin="0,0,6,0">
+                                            <Border.Background>
+                                                <SolidColorBrush Color="{Binding ColorHex, 
+                                                    Converter={StaticResource HexToColorConverter}, 
+                                                    FallbackValue=#4682B4}"/>
+                                            </Border.Background>
+                                        </Border>
+                                        
+                                        <!-- Имя ресурса -->
+                                        <TextBlock Grid.Column="1"
+                                                   Text="{Binding Name}"
+                                                   VerticalAlignment="Center"
+                                                   TextTrimming="CharacterEllipsis"
+                                                   FontSize="11"/>
+                                    </Grid>
+                                </Border>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </ScrollViewer>
+            </Border>
+
+            <!-- ═══════════════════════════════════════════════════════════ -->
+            <!-- ENGAGEMENT TIMELINE (Row 2, Column 2)                       -->
+            <!-- ═══════════════════════════════════════════════════════════ -->
+            <Border Grid.Row="2" Grid.Column="2"
+                    BorderBrush="{StaticResource GridLineBrush}"
+                    BorderThickness="0">
+                <controls:ResourceEngagementStrip
+                    x:Name="EngagementStrip"
+                    ResourceService="{Binding ResourceService}"
+                    EngagementService="{Binding EngagementService}"
+                    ProjectManager="{Binding ProjectManager}"
+                    ColumnWidth="{Binding ColumnWidth}"
+                    ShowResourceNames="False"/>
             </Border>
         </Grid>
     </DockPanel>

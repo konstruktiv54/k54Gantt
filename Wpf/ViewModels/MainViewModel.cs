@@ -44,6 +44,17 @@ public partial class MainViewModel : ObservableObject
     private string _projectName = "Новый проект";
     
     /// <summary>
+    /// Сервис расчёта вовлечённости.
+    /// </summary>
+    [ObservableProperty]
+    private EngagementCalculationService? _engagementService;
+
+    /// <summary>
+    /// Ширина колонки (дня) на диаграмме — для синхронизации.
+    /// </summary>
+    public double ColumnWidth => ZoomLevel * 0.4; // Настрой коэффициент под твой ZoomLevel
+    
+    /// <summary>
     /// Менеджер проекта (содержит все задачи).
     /// </summary>
     [ObservableProperty]
@@ -261,6 +272,8 @@ public partial class MainViewModel : ObservableObject
 
         // Создаём новый проект по умолчанию
         CreateNewProject();
+
+        EngagementService?.ProjectManager = ProjectManager;
     }
 
     #endregion

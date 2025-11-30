@@ -157,4 +157,89 @@
         <Setter Property="Cursor" Value="SizeWE"/>
     </Style>
 
+    <!-- ═══════════════════════════════════════════════════════════════ -->
+    <!-- TOOLBAR STYLES                                                  -->
+    <!-- ═══════════════════════════════════════════════════════════════ -->
+
+    <Style x:Key="SidebarToolbarStyle" TargetType="ToolBar">
+        <Setter Property="Background" Value="{StaticResource SidebarBackgroundBrush}" />
+        <Setter Property="BorderThickness" Value="0,0,0,1" />
+        <Setter Property="BorderBrush" Value="{StaticResource GridLineBrush}" />
+        <Setter Property="Height" Value="40" />
+        <Setter Property="Padding" Value="4,2" />
+        <Setter Property="VerticalAlignment" Value="Top" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="ToolBar">
+                    <Border Background="{TemplateBinding Background}"
+                            BorderBrush="{TemplateBinding BorderBrush}"
+                            BorderThickness="{TemplateBinding BorderThickness}"
+                            Padding="{TemplateBinding Padding}">
+                        <DockPanel>
+                            <ContentPresenter DockPanel.Dock="Top" />
+                            <Rectangle x:Name="Grip"
+                                       Width="3"
+                                       Height="3"
+                                       Margin="0,0,2,0"
+                                       Fill="{StaticResource TextSecondaryBrush}"
+                                       Opacity="0.5"
+                                       VerticalAlignment="Center"
+                                       Visibility="Collapsed" />
+                        </DockPanel>
+                    </Border>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <!-- Стиль для кнопок в тулбаре -->
+    <Style x:Key="ToolBarButtonStyle" TargetType="Button">
+        <Setter Property="Background" Value="Transparent" />
+        <Setter Property="BorderThickness" Value="0" />
+        <Setter Property="Padding" Value="6" />
+        <Setter Property="Margin" Value="1" />
+        <Setter Property="Width" Value="28" />
+        <Setter Property="Height" Value="28" />
+        <Setter Property="Cursor" Value="Hand" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="Button">
+                    <Border x:Name="border"
+                            Background="{TemplateBinding Background}"
+                            BorderBrush="{StaticResource GridLineBrush}"
+                            BorderThickness="0"
+                            CornerRadius="3"
+                            SnapsToDevicePixels="True">
+                        <ContentPresenter x:Name="contentPresenter"
+                                          HorizontalAlignment="Center"
+                                          VerticalAlignment="Center"
+                                          RecognizesAccessKey="True"
+                                          SnapsToDevicePixels="{TemplateBinding SnapsToDevicePixels}" />
+                    </Border>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter TargetName="border" Property="Background" Value="{StaticResource GridLineBrush}" />
+                        </Trigger>
+                        <Trigger Property="IsPressed" Value="True">
+                            <Setter TargetName="border" Property="Background"
+                                    Value="{StaticResource TextSecondaryBrush}" />
+                            <Setter TargetName="border" Property="BorderThickness" Value="1" />
+                        </Trigger>
+                        <Trigger Property="IsEnabled" Value="False">
+                            <Setter TargetName="contentPresenter" Property="Opacity" Value="0.5" />
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <!-- Стиль для разделителя в тулбаре -->
+    <Style x:Key="ToolBarSeparatorStyle" TargetType="Separator">
+        <Setter Property="Background" Value="{StaticResource GridLineBrush}" />
+        <Setter Property="Margin" Value="4,6" />
+        <Setter Property="Width" Value="1" />
+        <Setter Property="Height" Value="20" />
+    </Style>
+
 </ResourceDictionary>
