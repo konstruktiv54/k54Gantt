@@ -35,7 +35,7 @@
 
         <Grid.ColumnDefinitions>
             <ColumnDefinition Width="*"/>
-            <ColumnDefinition Width="220"/>
+            <ColumnDefinition Width="280"/>
         </Grid.ColumnDefinitions>
 
         <!-- ═══════════════════════════════════════════════════════════════ -->
@@ -91,7 +91,7 @@
                     
                     <!-- Роль -->
                     <DataGridTextColumn Header="Роль" 
-                                        Binding="{Binding Role}" 
+                                        Binding="{Binding Role, Converter={StaticResource EnumToDisplayNameConverter}}" 
                                         Width="120"/>
                 </DataGrid.Columns>
             </DataGrid>
@@ -169,6 +169,84 @@
                         Click="SaveOrAddButton_Click"
                         Style="{StaticResource PrimaryButtonStyle}"
                         Margin="0,0,0,8"/>
+                
+                <!-- ═══════════════════════════════════════════════════════════ -->
+                <!-- ИНТЕРВАЛЫ УЧАСТИЯ (только в режиме редактирования)          -->
+                <!-- ═══════════════════════════════════════════════════════════ -->
+                <Expander Header="Интервалы участия" 
+                          IsExpanded="False"
+                          Visibility="{Binding IsEditMode, Converter={StaticResource BoolToVisibilityConverter}}"
+                          Margin="0,8,0,8">
+                    <StackPanel>
+                        <DataGrid ItemsSource="{Binding ParticipationIntervals}"
+                                  SelectedItem="{Binding SelectedInterval}"
+                                  AutoGenerateColumns="False"
+                                  CanUserAddRows="False"
+                                  CanUserDeleteRows="False"
+                                  Height="100"
+                                  Margin="0,4,0,4">
+                            <DataGrid.Columns>
+                                <DataGridTextColumn Header="С (день)" 
+                                                    Binding="{Binding Start.Days}" 
+                                                    Width="60"/>
+                                <DataGridTextColumn Header="По (день)" 
+                                                    Binding="{Binding End.Days, TargetNullValue='∞'}" 
+                                                    Width="60"/>
+                                <DataGridTextColumn Header="MaxWL%" 
+                                                    Binding="{Binding MaxWorkload}" 
+                                                    Width="55"/>
+                            </DataGrid.Columns>
+                        </DataGrid>
+                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                            <Button Content="+" Width="28" Height="28" 
+                                    Command="{Binding AddIntervalCommand}"
+                                    ToolTip="Добавить интервал"
+                                    Margin="0,0,4,0"/>
+                            <Button Content="×" Width="28" Height="28" 
+                                    Command="{Binding RemoveIntervalCommand}"
+                                    ToolTip="Удалить интервал"
+                                    Foreground="#D32F2F"/>
+                        </StackPanel>
+                    </StackPanel>
+                </Expander>
+
+                <!-- ОТСУТСТВИЯ (только в режиме редактирования)                 -->
+                <Expander Header="Отсутствия" 
+                          IsExpanded="False"
+                          Visibility="{Binding IsEditMode, Converter={StaticResource BoolToVisibilityConverter}}"
+                          Margin="0,0,0,8">
+                    <StackPanel>
+                        <DataGrid ItemsSource="{Binding Absences}"
+                                  SelectedItem="{Binding SelectedAbsence}"
+                                  AutoGenerateColumns="False"
+                                  CanUserAddRows="False"
+                                  CanUserDeleteRows="False"
+                                  Height="100"
+                                  Margin="0,4,0,4">
+                            <DataGrid.Columns>
+                                <DataGridTextColumn Header="С (день)" 
+                                                    Binding="{Binding Start.Days}" 
+                                                    Width="60"/>
+                                <DataGridTextColumn Header="По (день)" 
+                                                    Binding="{Binding End.Days}" 
+                                                    Width="60"/>
+                                <DataGridTextColumn Header="Причина" 
+                                                    Binding="{Binding Reason}" 
+                                                    Width="*"/>
+                            </DataGrid.Columns>
+                        </DataGrid>
+                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                            <Button Content="+" Width="28" Height="28" 
+                                    Command="{Binding AddAbsenceCommand}"
+                                    ToolTip="Добавить отсутствие"
+                                    Margin="0,0,4,0"/>
+                            <Button Content="×" Width="28" Height="28" 
+                                    Command="{Binding RemoveAbsenceCommand}"
+                                    ToolTip="Удалить отсутствие"
+                                    Foreground="#D32F2F"/>
+                        </StackPanel>
+                    </StackPanel>
+                </Expander>
                 
                 <Button Content="Редактировать"
                         Command="{Binding EditResourceCommand}"

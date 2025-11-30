@@ -77,6 +77,47 @@ public partial class ResourceViewModel : ObservableObject
     public ResourceRole[] AvailableRoles { get; } = Enum.GetValues<ResourceRole>();
 
     #endregion
+    
+    #region Observable Properties - Participation Intervals
+
+    /// <summary>
+    /// Интервалы участия выбранного ресурса.
+    /// </summary>
+    [ObservableProperty]
+    private ObservableCollection<ParticipationInterval> _participationIntervals = new();
+
+    /// <summary>
+    /// Выбранный интервал участия.
+    /// </summary>
+    [ObservableProperty]
+    private ParticipationInterval? _selectedInterval;
+
+    #endregion
+
+    #region Observable Properties - Absences
+
+    /// <summary>
+    /// Отсутствия выбранного ресурса.
+    /// </summary>
+    [ObservableProperty]
+    private ObservableCollection<Absence> _absences = new();
+
+    /// <summary>
+    /// Выбранное отсутствие.
+    /// </summary>
+    [ObservableProperty]
+    private Absence? _selectedAbsence;
+
+    #endregion
+
+    #region Computed Properties
+
+    /// <summary>
+    /// Можно ли редактировать MaxWorkload (false для Constructor).
+    /// </summary>
+    public bool IsMaxWorkloadEditable => EditRole != ResourceRole.Constructor;
+
+    #endregion
 
     #region Constructor
 
@@ -255,6 +296,126 @@ public partial class ResourceViewModel : ObservableObject
 
     #endregion
 
+    #region Commands - Participation Intervals
+
+    /// <summary>
+    /// Добавить новый интервал участия.
+    /// </summary>
+    [RelayCommand]
+    private void AddInterval()
+    {
+        if (SelectedResource == null)
+        {
+            StatusMessage = "Сначала выберите ресурс";
+            return;
+        }
+
+        try
+        {
+            var interval = new ParticipationInterval(
+                SelectedResource.Id,
+                TimeSpan.Zero,
+                null,
+                SelectedResource.Role == ResourceRole.Constructor ? 100 : 100
+            );
+
+            _resourceService.AddParticipationInterval(interval);
+            ParticipationIntervals.Add(interval);
+            StatusMessage = "Интервал добавлен";
+        }
+        catch (Exception ex)
+        {
+            StatusMessage = $"Ошибка: {ex.Message}";
+        }
+    }
+
+    /// <summary>
+    /// Удалить выбранный интервал участия.
+    /// </summary>
+    [RelayCommand]
+    private void RemoveInterval()
+    {
+        if (SelectedInterval == null)
+        {
+            StatusMessage = "Выберите интервал для удаления";
+            return;
+        }
+
+        try
+        {
+            _resourceService.RemoveParticipationInterval(SelectedInterval.Id);
+            ParticipationIntervals.Remove(SelectedInterval);
+            SelectedInterval = null;
+            StatusMessage = "Интервал удалён";
+        }
+        catch (Exception ex)
+        {
+            StatusMessage = $"Ошибка: {ex.Message}";
+        }
+    }
+
+    #endregion
+
+    #region Commands - Absences
+
+    /// <summary>
+    /// Добавить новое отсутствие.
+    /// </summary>
+    [RelayCommand]
+    private void AddAbsence()
+    {
+        if (SelectedResource == null)
+        {
+            StatusMessage = "Сначала выберите ресурс";
+            return;
+        }
+
+        try
+        {
+            var absence = new Absence(
+                SelectedResource.Id,
+                TimeSpan.Zero,
+                TimeSpan.FromDays(1),
+                "Отпуск"
+            );
+
+            _resourceService.AddAbsence(absence);
+            Absences.Add(absence);
+            StatusMessage = "Отсутствие добавлено";
+        }
+        catch (Exception ex)
+        {
+            StatusMessage = $"Ошибка: {ex.Message}";
+        }
+    }
+
+    /// <summary>
+    /// Удалить выбранное отсутствие.
+    /// </summary>
+    [RelayCommand]
+    private void RemoveAbsence()
+    {
+        if (SelectedAbsence == null)
+        {
+            StatusMessage = "Выберите отсутствие для удаления";
+            return;
+        }
+
+        try
+        {
+            _resourceService.RemoveAbsence(SelectedAbsence.Id);
+            Absences.Remove(SelectedAbsence);
+            SelectedAbsence = null;
+            StatusMessage = "Отсутствие удалено";
+        }
+        catch (Exception ex)
+        {
+            StatusMessage = $"Ошибка: {ex.Message}";
+        }
+    }
+
+    #endregion
+    
     #region Private Methods
 
     private void LoadResources()
@@ -290,6 +451,41 @@ public partial class ResourceViewModel : ObservableObject
             return parts[0].Substring(0, 2).ToUpper();
         
         return name.Length > 0 ? name[0].ToString().ToUpper() : "?";
+    }
+    
+    /// <summary>
+    /// Вызывается при изменении выбранного ресурса.
+    /// </summary>
+    partial void OnSelectedResourceChanged(Resource? value)
+    {
+        LoadIntervalsAndAbsences();
+    }
+    
+    private void LoadIntervalsAndAbsences()
+    {
+        ParticipationIntervals.Clear();
+        Absences.Clear();
+
+        if (SelectedResource == null)
+            return;
+
+        foreach (var interval in _resourceService.GetParticipationIntervalsForResource(SelectedResource.Id))
+        {
+            ParticipationIntervals.Add(interval);
+        }
+
+        foreach (var absence in _resourceService.GetAbsencesForResource(SelectedResource.Id))
+        {
+            Absences.Add(absence);
+        }
+    }
+
+    /// <summary>
+    /// Вызывается при изменении роли — обновляет IsMaxWorkloadEditable.
+    /// </summary>
+    partial void OnEditRoleChanged(ResourceRole value)
+    {
+        OnPropertyChanged(nameof(IsMaxWorkloadEditable));
     }
 
     #endregion
