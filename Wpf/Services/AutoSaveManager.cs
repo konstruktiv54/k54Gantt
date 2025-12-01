@@ -15,7 +15,7 @@ public class AutoSaveManager : ObservableObject
     #region Fields
 
     private readonly FileService _fileService;
-    private readonly MainViewModel _mainViewModel;
+    private MainViewModel? _mainViewModel;  // Изменено: nullable, устанавливается в Initialize
     private readonly DispatcherTimer _autoSaveTimer;
     private bool _isEnabled = true;
 
@@ -45,11 +45,9 @@ public class AutoSaveManager : ObservableObject
     /// Конструктор.
     /// </summary>
     /// <param name="fileService">Сервис для сохранения файлов.</param>
-    /// <param name="mainViewModel">Главная ViewModel для доступа к состоянию проекта.</param>
-    public AutoSaveManager(FileService fileService, MainViewModel mainViewModel)
+    public AutoSaveManager(FileService fileService)
     {
         _fileService = fileService ?? throw new ArgumentNullException(nameof(fileService));
-        _mainViewModel = mainViewModel ?? throw new ArgumentNullException(nameof(mainViewModel));
 
         // Инициализация таймера
         _autoSaveTimer = new DispatcherTimer
@@ -57,14 +55,21 @@ public class AutoSaveManager : ObservableObject
             Interval = TimeSpan.FromMinutes(AutoSaveIntervalMinutes)
         };
         _autoSaveTimer.Tick += OnAutoSaveTick;
-
-        // Подписка на события изменений для установки HasUnsavedChanges
-        SubscribeToChangeEvents();
     }
 
     #endregion
 
     #region Public Methods
+
+    /// <summary>
+    /// Инициализирует менеджер с MainViewModel (вызывается после создания).
+    /// </summary>
+    /// <param name="mainViewModel">Главная ViewModel.</param>
+    public void Initialize(MainViewModel mainViewModel)
+    {
+        _mainViewModel = mainViewModel ?? throw new ArgumentNullException(nameof(mainViewModel));
+        SubscribeToChangeEvents();
+    }
 
     /// <summary>
     /// Запускает автосохранение.
@@ -95,7 +100,7 @@ public class AutoSaveManager : ObservableObject
     /// </summary>
     private void OnAutoSaveTick(object? sender, EventArgs e)
     {
-        if (!_mainViewModel.HasUnsavedChanges || string.IsNullOrEmpty(_mainViewModel.CurrentFilePath) || _mainViewModel.ProjectManager == null)
+        if (_mainViewModel == null || !_mainViewModel.HasUnsavedChanges || string.IsNullOrEmpty(_mainViewModel.CurrentFilePath) || _mainViewModel.ProjectManager == null)
         {
             return;
         }
@@ -120,6 +125,8 @@ public class AutoSaveManager : ObservableObject
     /// </summary>
     private void SubscribeToChangeEvents()
     {
+        if (_mainViewModel == null) return;  // Защита
+
         if (_mainViewModel.ProjectManager != null)
         {
             _mainViewModel.ProjectManager.ScheduleChanged += OnProjectChanged;
@@ -148,7 +155,10 @@ public class AutoSaveManager : ObservableObject
     /// </summary>
     private void OnProjectChanged(object? sender, EventArgs e)
     {
-        _mainViewModel.HasUnsavedChanges = true;
+        if (_mainViewModel != null)
+        {
+            _mainViewModel.HasUnsavedChanges = true;
+        }
     }
 
     /// <summary>
@@ -156,7 +166,10 @@ public class AutoSaveManager : ObservableObject
     /// </summary>
     private void OnResourcesChanged(object? sender, EventArgs e)
     {
-        _mainViewModel.HasUnsavedChanges = true;
+        if (_mainViewModel != null)
+        {
+            _mainViewModel.HasUnsavedChanges = true;
+        }
     }
 
     #endregion

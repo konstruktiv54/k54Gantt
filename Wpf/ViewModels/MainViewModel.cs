@@ -294,6 +294,7 @@ public partial class MainViewModel : ObservableObject
 
         // Создаём новый проект по умолчанию
         CreateNewProject();
+        _autoSaveManager.Initialize(this);
     }
 
     #endregion
