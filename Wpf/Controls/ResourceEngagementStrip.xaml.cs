@@ -354,7 +354,9 @@ public partial class ResourceEngagementStrip : UserControl
                 state = status.State;
                 allocationPercent = status.AllocationPercent;
                 maxWorkload = status.MaxWorkload;
-                tooltipText = status.TooltipText;
+            
+                // ИЗМЕНЕНИЕ: Используем новый метод вместо status.TooltipText
+                tooltipText = BuildTooltipText(resource, status);
             }
             else
             {
@@ -381,6 +383,73 @@ public partial class ResourceEngagementStrip : UserControl
             StrokeThickness = 1
         };
         EngagementCanvas.Children.Add(line);
+    }
+
+
+    /// </summary>
+    /// <param name="resource">Ресурс.</param>
+    /// <param name="status">Статус дня.</param>
+    /// <returns>Форматированный текст для tooltip.</returns>
+    private string BuildTooltipText(Resource resource, DayStatus status)
+    {
+        var lines = new List<string>();
+
+        // ═══ Заголовок: Имя и роль ═══
+        lines.Add(resource.Name);
+        lines.Add(resource.Role.GetDisplayName());
+        lines.Add("───────────────────────");
+
+        // ═══ Дата ═══
+        if (ProjectManager != null)
+        {
+            var actualDate = ProjectManager.Start.AddDays(status.Day.Days);
+            lines.Add($"Дата: {actualDate:dd.MM.yyyy}");
+        }
+        else
+        {
+            lines.Add($"День: {status.Day.Days}");
+        }
+
+        // ═══ Статус ═══
+        lines.Add($"Статус: {status.State.GetDisplayName()}");
+
+        // ═══ Загрузка (только если участвует в проекте) ═══
+        if (status.InParticipation)
+        {
+            lines.Add($"Загрузка: {status.AllocationPercent}% / {status.MaxWorkload}%");
+        }
+
+        // ═══ Причина отсутствия ═══
+        if (status.InAbsence && !string.IsNullOrWhiteSpace(status.AbsenceReason))
+        {
+            lines.Add($"Причина: {status.AbsenceReason}");
+        }
+
+        // ═══ Назначения (детализация) ═══
+        if (status.Assignments.Count > 0 && ProjectManager != null)
+        {
+            lines.Add("───────────────────────");
+            lines.Add("Назначения:");
+
+            var coefficient = resource.Role.GetCoefficient();
+
+            foreach (var assignment in status.Assignments)
+            {
+                var task = ProjectManager.GetTaskById(assignment.TaskId);
+                var taskName = task?.Name ?? $"Задача {assignment.TaskId:N}";
+                var contribution = (int)Math.Round(assignment.Workload * coefficient);
+
+                // Формат: • Задача А (100% × 1.00 = 100%)
+                lines.Add($"• {taskName} ({assignment.Workload}% × {coefficient:F2} = {contribution}%)");
+            }
+        }
+        else if (status.Assignments.Count > 0)
+        {
+            // Fallback без ProjectManager
+            lines.Add($"Назначений: {status.Assignments.Count}");
+        }
+
+        return string.Join(Environment.NewLine, lines);
     }
 
     private Rectangle CreateCell(DayState state, string colorHex, int allocation, int maxWorkload, string tooltip)

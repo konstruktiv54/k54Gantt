@@ -117,6 +117,7 @@ public partial class MainWindow : Window
         {
             // Связываем callbacks
             vm.ExportToPdfAction = GanttChart.ExportToXpsWithDialog;
+            vm.EditNoteAction = GanttChart.EditNote;
         }
         
         // Синхронизация скролла

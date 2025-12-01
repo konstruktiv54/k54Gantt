@@ -58,8 +58,6 @@ public partial class MainViewModel : ObservableObject
 
     partial void OnZoomLevelChanged(int value)
     {
-        var newColumnWidth = 30.0 * value / 100.0;
-
         // Уведомляем об изменении ColumnWidth
         OnPropertyChanged(nameof(ColumnWidth));
     }
@@ -583,7 +581,6 @@ public partial class MainViewModel : ObservableObject
 
     #endregion
 
-
     #region Print Commands
 
     [RelayCommand]
@@ -599,7 +596,6 @@ public partial class MainViewModel : ObservableObject
     }
 
     #endregion
-
 
     #region Task Commands
 
@@ -1207,6 +1203,7 @@ public partial class MainViewModel : ObservableObject
         OnPropertyChanged(nameof(CanUngroup));
         OnPropertyChanged(nameof(CanAddSubtask));
         OnPropertyChanged(nameof(CanDeleteTask));
+        OnPropertyChanged(nameof(CanEditNote));
     }
     
     private void InitializeHierarchyBuilder()
@@ -1330,6 +1327,40 @@ public partial class MainViewModel : ObservableObject
     /// Сервис ресурсов (для binding).
     /// </summary>
     public ResourceService ResourceService => _resourceService;
+
+    #endregion
+    
+    #region Note Commands
+
+    /// <summary>
+    /// Действие для редактирования заметки (связывается с GanttChartControl).
+    /// </summary>
+    public Action<Task?>? EditNoteAction { get; set; }
+
+    /// <summary>
+    /// Можно ли редактировать заметку.
+    /// </summary>
+    public bool CanEditNote => SelectedTask != null;
+
+    /// <summary>
+    /// Команда: Редактировать/добавить заметку.
+    /// </summary>
+    [RelayCommand(CanExecute = nameof(CanEditNote))]
+    private void EditNote()
+    {
+        if (SelectedTask == null)
+        {
+            StatusText = "Выберите задачу для редактирования заметки";
+            return;
+        }
+
+        // Вызываем через Action, который связан с GanttChartControl
+        EditNoteAction?.Invoke(SelectedTask);
+    
+        StatusText = string.IsNullOrEmpty(SelectedTask.Note) 
+            ? $"Добавление заметки к '{SelectedTask.Name}'"
+            : $"Редактирование заметки '{SelectedTask.Name}'";
+    }
 
     #endregion
 }

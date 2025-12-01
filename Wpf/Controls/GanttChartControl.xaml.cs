@@ -1974,6 +1974,53 @@ public partial class GanttChartControl : UserControl
     #region Note Editing
 
     /// <summary>
+    /// Открывает редактор заметки для указанной задачи.
+    /// Используется для вызова из контекстного меню или команды.
+    /// </summary>
+    /// <param name="task">Задача для редактирования заметки.</param>
+    public void EditNote(Task? task)
+    {
+        if (task == null || ProjectManager == null)
+            return;
+
+        // Закрываем существующий popup если есть
+        if (_expandedNoteTask != null)
+        {
+            HideExpandedNote(save: true);
+        }
+
+        // Находим позицию задачи на диаграмме
+        var visibleTasks = GetVisibleTasks();
+        var rowIndex = visibleTasks.IndexOf(task);
+
+        if (rowIndex < 0)
+        {
+            // Задача не видна (свёрнута в группе)
+            MessageBox.Show(
+                "Задача не отображается на диаграмме. Разверните родительскую группу.",
+                "Невозможно открыть заметку",
+                MessageBoxButton.OK,
+                MessageBoxImage.Information);
+            return;
+        }
+
+        // Вычисляем позицию для popup
+        var taskX = task.Start.Days * ColumnWidth;
+        var taskWidth = Math.Max(task.Duration.Days * ColumnWidth, ColumnWidth);
+        var taskY = rowIndex * RowHeight + BarSpacing / 2;
+
+        // Позиционируем popup справа от бара задачи
+        var anchorRect = new Rect(
+            taskX + taskWidth + 16,  // Справа от бара с отступом
+            taskY,
+            NotePopupDefaultWidth,
+            NotePopupDefaultHeight);
+
+        // Открываем редактор
+        ShowExpandedNote(task, anchorRect);
+    }
+    
+    /// <summary>
     /// Hit-test для области заметки.
     /// </summary>
     private (Task? Task, Rect NoteRect) HitTestNote(Point position)

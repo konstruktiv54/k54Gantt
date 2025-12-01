@@ -37,6 +37,7 @@
         <KeyBinding Key="G" Modifiers="Control" Command="{Binding MakeGroupCommand}"/>
         <KeyBinding Key="G" Modifiers="Control+Shift" Command="{Binding UngroupCommand}"/>
         <KeyBinding Key="Delete" Command="{Binding DeleteTaskCommand}"/>
+        <KeyBinding Key="F2" Command="{Binding EditNoteCommand}"/>
     </Window.InputBindings>
 
     <!-- ═══════════════════════════════════════════════════════════════ -->
@@ -74,6 +75,14 @@
             <Separator/>
             <MenuItem Header="Назначить ресурсы..." 
                       Command="{Binding AssignResourcesCommand}"/>
+            <Separator/>
+            <MenuItem Header="Редактировать заметку..." 
+                      Command="{Binding EditNoteCommand}"
+                      InputGestureText="F2">
+                <MenuItem.Icon>
+                    <icon:MaterialIcon Kind="NoteEdit" Width="16" Height="16"/>
+                </MenuItem.Icon>
+            </MenuItem>
             <Separator/>
             <MenuItem Header="Удалить" 
                       Command="{Binding DeleteTaskCommand}"
@@ -272,10 +281,11 @@
                               RowHeight="28"
                               HeadersVisibility="Column"
                               ContextMenu="{StaticResource TaskContextMenu}">
-                        
                         <DataGrid.Columns>
-                            <!-- Имя задачи с отступом по уровню -->
-                            <DataGridTemplateColumn Header="Задача" Width="*" MinWidth="150">
+                            <!-- ═══════════════════════════════════════════════════════════ -->
+                            <!-- Имя задачи с отступом по уровню                             -->
+                            <!-- ═══════════════════════════════════════════════════════════ -->
+                            <DataGridTemplateColumn Header="Задача" Width="*" MinWidth="120">
                                 <DataGridTemplateColumn.CellTemplate>
                                     <DataTemplate>
                                         <StackPanel Orientation="Horizontal"
@@ -285,19 +295,21 @@
                                                                Foreground="{StaticResource TextSecondaryBrush}">
                                                 <icon:MaterialIcon.Style>
                                                     <Style TargetType="icon:MaterialIcon">
-                                                        <Setter Property="Kind" Value="CheckboxBlankCircleOutline"/>
+                                                        <Setter Property="Kind" Value="CheckboxBlankCircleOutline" />
                                                         <Style.Triggers>
                                                             <DataTrigger Binding="{Binding IsGroup}" Value="True">
-                                                                <Setter Property="Kind" Value="FolderOutline"/>
+                                                                <Setter Property="Kind" Value="FolderOutline" />
                                                             </DataTrigger>
                                                             <DataTrigger Binding="{Binding IsSplitRoot}" Value="True">
-                                                                <Setter Property="Kind" Value="CallSplit"/>
+                                                                <Setter Property="Kind" Value="CallSplit" />
                                                             </DataTrigger>
                                                         </Style.Triggers>
                                                     </Style>
                                                 </icon:MaterialIcon.Style>
                                             </icon:MaterialIcon>
-                                            <TextBlock Text="{Binding Name}" VerticalAlignment="Center"/>
+                                            <TextBlock Text="{Binding Name}"
+                                                       VerticalAlignment="Center"
+                                                       TextTrimming="CharacterEllipsis" />
                                         </StackPanel>
                                     </DataTemplate>
                                 </DataGridTemplateColumn.CellTemplate>
@@ -305,31 +317,131 @@
                                     <DataTemplate>
                                         <TextBox Text="{Binding Name, UpdateSourceTrigger=PropertyChanged}"
                                                  Margin="{Binding Level, Converter={StaticResource LevelToMarginConverter}}"
-                                                 BorderThickness="0" Padding="20,0,0,0"/>
+                                                 BorderThickness="0"
+                                                 Padding="20,0,0,0" />
                                     </DataTemplate>
                                 </DataGridTemplateColumn.CellEditingTemplate>
                             </DataGridTemplateColumn>
 
-                            <!-- Начало -->
-                            <DataGridTextColumn Header="Начало" Binding="{Binding Task.Start.Days}" Width="60"/>
+                            <!-- ═══════════════════════════════════════════════════════════ -->
+                            <!-- Дата начала (DatePicker)                                    -->
+                            <!-- ═══════════════════════════════════════════════════════════ -->
+                            <DataGridTemplateColumn Header="Начало" Width="95" SortMemberPath="StartDate">
+                                <DataGridTemplateColumn.CellTemplate>
+                                    <DataTemplate>
+                                        <TextBlock Text="{Binding StartDate, StringFormat=dd.MM.yyyy}"
+                                                   VerticalAlignment="Center"
+                                                   HorizontalAlignment="Center"
+                                                   Padding="2,0" />
+                                    </DataTemplate>
+                                </DataGridTemplateColumn.CellTemplate>
+                                <DataGridTemplateColumn.CellEditingTemplate>
+                                    <DataTemplate>
+                                        <DatePicker
+                                            SelectedDate="{Binding StartDate, UpdateSourceTrigger=PropertyChanged}"
+                                            BorderThickness="0"
+                                            Padding="0"
+                                            VerticalContentAlignment="Center" />
+                                    </DataTemplate>
+                                </DataGridTemplateColumn.CellEditingTemplate>
+                            </DataGridTemplateColumn>
 
-                            <!-- Длительность -->
-                            <DataGridTextColumn Header="Дней" 
-                                                Binding="{Binding DurationDays}" 
-                                                Width="50"
-                                                IsReadOnly="True"/>
+                            <!-- ═══════════════════════════════════════════════════════════ -->
+                            <!-- Длительность (дней)                                         -->
+                            <!-- ═══════════════════════════════════════════════════════════ -->
+                            <DataGridTextColumn Header="Дней"
+                                                Binding="{Binding DurationDays}"
+                                                Width="45"
+                                                IsReadOnly="True">
+                                <DataGridTextColumn.ElementStyle>
+                                    <Style TargetType="TextBlock">
+                                        <Setter Property="HorizontalAlignment" Value="Center" />
+                                        <Setter Property="VerticalAlignment" Value="Center" />
+                                    </Style>
+                                </DataGridTextColumn.ElementStyle>
+                            </DataGridTextColumn>
 
-                            <!-- Прогресс -->
-                            <DataGridTemplateColumn Header="%" Width="50">
+                            <!-- ═══════════════════════════════════════════════════════════ -->
+                            <!-- Прогресс (%)                                                -->
+                            <!-- ═══════════════════════════════════════════════════════════ -->
+                            <DataGridTemplateColumn Header="%" Width="45" SortMemberPath="CompletePercent">
                                 <DataGridTemplateColumn.CellTemplate>
                                     <DataTemplate>
                                         <TextBlock Text="{Binding CompletePercent, StringFormat={}{0}%}"
-                                                   HorizontalAlignment="Center"/>
+                                                   HorizontalAlignment="Center"
+                                                   VerticalAlignment="Center" />
                                     </DataTemplate>
                                 </DataGridTemplateColumn.CellTemplate>
                             </DataGridTemplateColumn>
 
-                            <!-- Ресурсы -->
+                            <!-- ═══════════════════════════════════════════════════════════ -->
+                            <!-- Дедлайн (DatePicker с возможностью очистки)                 -->
+                            <!-- ═══════════════════════════════════════════════════════════ -->
+                            <DataGridTemplateColumn Header="Дедлайн" Width="95" SortMemberPath="DeadlineDate">
+                                <DataGridTemplateColumn.CellTemplate>
+                                    <DataTemplate>
+                                        <Grid>
+                                            <!-- Текст даты или прочерк -->
+                                            <TextBlock VerticalAlignment="Center"
+                                                       HorizontalAlignment="Center"
+                                                       Padding="2,0">
+                                                <TextBlock.Style>
+                                                    <Style TargetType="TextBlock">
+                                                        <Setter Property="Text"
+                                                                Value="{Binding DeadlineDate, StringFormat=dd.MM.yyyy}" />
+                                                        <Setter Property="Foreground"
+                                                                Value="{StaticResource TextPrimaryBrush}" />
+                                                        <Style.Triggers>
+                                                            <!-- Если дедлайна нет — показываем прочерк -->
+                                                            <DataTrigger Binding="{Binding HasDeadline}" Value="False">
+                                                                <Setter Property="Text" Value="—" />
+                                                                <Setter Property="Foreground"
+                                                                        Value="{StaticResource TextSecondaryBrush}" />
+                                                            </DataTrigger>
+                                                            <!-- Если просрочено — красный цвет -->
+                                                            <DataTrigger Binding="{Binding IsOverdue}" Value="True">
+                                                                <Setter Property="Foreground" Value="#D32F2F" />
+                                                                <Setter Property="FontWeight" Value="SemiBold" />
+                                                            </DataTrigger>
+                                                        </Style.Triggers>
+                                                    </Style>
+                                                </TextBlock.Style>
+                                            </TextBlock>
+                                        </Grid>
+                                    </DataTemplate>
+                                </DataGridTemplateColumn.CellTemplate>
+                                <DataGridTemplateColumn.CellEditingTemplate>
+                                    <DataTemplate>
+                                        <Grid>
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*" />
+                                                <ColumnDefinition Width="Auto" />
+                                            </Grid.ColumnDefinitions>
+
+                                            <!-- DatePicker для выбора даты -->
+                                            <DatePicker Grid.Column="0"
+                                                        SelectedDate="{Binding DeadlineDate, UpdateSourceTrigger=PropertyChanged}"
+                                                        BorderThickness="0"
+                                                        Padding="0"
+                                                        VerticalContentAlignment="Center" />
+
+                                            <!-- Кнопка очистки дедлайна -->
+                                            <Button Grid.Column="1"
+                                                    Command="{Binding ClearDeadlineCommand}"
+                                                    ToolTip="Удалить дедлайн"
+                                                    Visibility="{Binding HasDeadline, Converter={StaticResource BoolToVisibilityConverter}}"
+                                                    Background="Transparent"
+                                                    BorderThickness="0"
+                                                    Padding="2"
+                                                    Margin="2,0,0,0"
+                                                    Cursor="Hand">
+                                                <icon:MaterialIcon Kind="Close" Width="12" Height="12"
+                                                                   Foreground="#999" />
+                                            </Button>
+                                        </Grid>
+                                    </DataTemplate>
+                                </DataGridTemplateColumn.CellEditingTemplate>
+                            </DataGridTemplateColumn>
                         </DataGrid.Columns>
                     </DataGrid>
                 </DockPanel>
@@ -380,6 +492,13 @@
                             <MenuItem Header="Разгруппировать" Command="{Binding UngroupCommand}"/>
                             <Separator/>
                             <MenuItem Header="Назначить ресурсы..." Command="{Binding AssignResourcesCommand}"/>
+                            <Separator/>
+                            <MenuItem Header="Редактировать заметку..." 
+                                      Command="{Binding EditNoteCommand}">
+                                <MenuItem.Icon>
+                                    <materialDesign:PackIcon Kind="NoteEdit"/>
+                                </MenuItem.Icon>
+                            </MenuItem>
                             <Separator/>
                             <MenuItem Header="Удалить" Command="{Binding DeleteTaskCommand}" Foreground="#D32F2F"/>
                         </ContextMenu>

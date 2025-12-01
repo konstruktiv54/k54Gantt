@@ -460,6 +460,15 @@ public partial class TaskItemViewModel : ObservableObject
     {
         IsNoteExpanded = !IsNoteExpanded;
     }
+    
+    /// <summary>
+    /// Команда очистки дедлайна.
+    /// </summary>
+    [RelayCommand]
+    private void ClearDeadline()
+    {
+        DeadlineDate = null;
+    }
 
     #endregion
 
