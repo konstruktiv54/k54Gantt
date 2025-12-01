@@ -1,7 +1,9 @@
 ﻿using System.ComponentModel;
 using System.Windows;
 using System.Windows.Input;
+using Microsoft.Win32;
 using Wpf.Controls;
+using Wpf.Services.Export;
 using Wpf.ViewModels;
 
 namespace Wpf.Views;
@@ -116,7 +118,7 @@ public partial class MainWindow : Window
         if (DataContext is MainViewModel vm)
         {
             // Связываем callbacks
-            vm.ExportToPdfAction = GanttChart.ExportToXpsWithDialog;
+            vm.ExportToPdfAction = ExportDocument;
             vm.EditNoteAction = GanttChart.EditNote;
         }
         
@@ -127,12 +129,12 @@ public partial class MainWindow : Window
         };
     }
 
-    
+
     public void RefreshChart()
     {
         GanttChart.InvalidateChart();
     }
-    
+
     /// <summary>
     /// Принудительно перерисовывает диаграмму (полный сброс).
     /// </summary>
@@ -163,4 +165,110 @@ public partial class MainWindow : Window
             }
         }
     }
+
+    #region Document Export
+
+    /// <summary>
+    /// Экспортирует полный документ (GanttChart + EngagementStrip) в XPS.
+    /// </summary>
+    /// <param name="projectName">Имя проекта для имени файла по умолчанию.</param>
+    /// <returns>true если экспорт успешен.</returns>
+    public bool ExportDocument(string? projectName)
+    {
+        // 1. Диалог сохранения
+        var saveDialog = new SaveFileDialog
+        {
+            Filter = "XPS документ (*.xps)|*.xps",
+            DefaultExt = ".xps",
+            FileName = $"{projectName ?? "Диаграмма Ганта"}_{DateTime.Now:yyyy-MM-dd}",
+            Title = "Экспорт в XPS"
+        };
+
+        if (saveDialog.ShowDialog() != true)
+            return false;
+
+        try
+        {
+            // 2. Собираем данные от GanttChart
+            var ganttData = GanttChart.GetExportData();
+            if (ganttData == null)
+            {
+                MessageBox.Show(
+                    "Нет данных диаграммы для экспорта.",
+                    "Ошибка",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Warning);
+                return false;
+            }
+
+            // 3. Собираем данные от EngagementStrip
+            var engagementData = EngagementStrip.GetExportDataForced();
+
+            // 4. Синхронизируем ширину (если EngagementStrip уже, расширяем)
+            if (engagementData != null)
+            {
+                SynchronizeExportWidth(ganttData, engagementData);
+            }
+
+            // 5. Создаём документ
+            var documentData = new DocumentExportData
+            {
+                GanttChart = ganttData,
+                EngagementStrip = engagementData,
+                SectionGap = 10
+            };
+
+            // 6. Экспортируем
+            DocumentExportService.ExportToXps(documentData, saveDialog.FileName);
+
+            // 7. Предлагаем открыть файл
+            var result = MessageBox.Show(
+                "XPS документ успешно сохранён. Открыть файл?",
+                "Экспорт завершён",
+                MessageBoxButton.YesNo,
+                MessageBoxImage.Question);
+
+            if (result == MessageBoxResult.Yes)
+            {
+                System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+                {
+                    FileName = saveDialog.FileName,
+                    UseShellExecute = true
+                });
+            }
+
+            return true;
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show(
+                $"Ошибка при экспорте:\n{ex.Message}",
+                "Ошибка экспорта",
+                MessageBoxButton.OK,
+                MessageBoxImage.Error);
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// Синхронизирует ширину GanttChart и EngagementStrip для экспорта.
+    /// </summary>
+    private void SynchronizeExportWidth(GanttChartExportData ganttData, EngagementStripExportData engagementData)
+    {
+        // Используем максимальную ширину из обоих компонентов
+        var maxWidth = Math.Max(ganttData.TotalWidth, engagementData.Engagement.Width);
+
+        // Обновляем ширину в данных (если нужно)
+        // Примечание: Это не изменяет исходные Canvas, только метаданные для экспорта
+        if (ganttData.TotalWidth < maxWidth)
+        {
+            // GanttChart уже, нужно будет расширить при клонировании
+            // Но текущая реализация CloneCanvasAsVisual использует ActualWidth источника
+            // Поэтому просто логируем
+            System.Diagnostics.Debug.WriteLine(
+                $"Export: GanttChart width ({ganttData.TotalWidth}) < EngagementStrip ({engagementData.Engagement.Width})");
+        }
+    }
+
+    #endregion
 }

@@ -8,6 +8,7 @@ using System.Windows.Media.Effects;
 using Core.Services;
 using Wpf.Rendering;
 using Wpf.Services;
+using Wpf.Services.Export;
 using Wpf.Views;
 using Task = Core.Interfaces.Task;
 
@@ -2354,21 +2355,67 @@ public partial class GanttChartControl : UserControl
 
         return calculatedHeight;
     }
-    
+
+    #endregion
+
+    #region Export Data Provider
+
     /// <summary>
-    /// Экспортирует диаграмму в PDF с диалогом настроек.
+    /// Возвращает данные диаграммы для экспорта.
     /// </summary>
+    public GanttChartExportData? GetExportData()
+    {
+        if (ProjectManager == null)
+            return null;
+
+        var chartStart = GetChartStart();
+        var chartWidth = GetChartEnd() - chartStart;
+        var chartHeight = GetFullChartHeight();
+        var headerHeight = HeaderHeight;
+
+        return new GanttChartExportData
+        {
+            Header = new ExportLayerData
+            {
+                Canvas = HeaderCanvas,
+                Width = chartWidth,
+                Height = headerHeight,
+                Name = "Header"
+            },
+            Grid = new ExportLayerData
+            {
+                Canvas = GridLayer,
+                Width = chartWidth,
+                Height = chartHeight,
+                Name = "Grid"
+            },
+            Tasks = new ExportLayerData
+            {
+                Canvas = TaskLayer,
+                Width = chartWidth,
+                Height = chartHeight,
+                Name = "Tasks"
+            },
+            TodayLine = new ExportLayerData
+            {
+                Canvas = GetTodayLayerForExport(),
+                Width = chartWidth,
+                Height = chartHeight,
+                Name = "TodayLine"
+            },
+            ColumnWidth = ColumnWidth,
+            ChartStartDay = chartStart / ColumnWidth,
+            TotalWidth = chartWidth
+        };
+    }
+
     /// <summary>
-    /// Экспортирует диаграмму в PDF с диалогом настроек.
-    /// Экспортирует ВСЮ рабочую область, включая невидимую часть.
-    /// </summary>
-    /// <summary>
-    /// Экспортирует диаграмму в PDF с диалогом настроек.
-    /// Экспортирует ВСЮ рабочую область, включая невидимую часть.
+    /// Экспортирует диаграмму в XPS с диалогом настроек.
+    /// DEPRECATED: Используйте DocumentExportService через MainWindow.
+    /// Оставлен для обратной совместимости.
     /// </summary>
     public bool ExportToXpsWithDialog(string? defaultProjectName = null)
     {
-        // Диалог сохранения файла
         var saveDialog = new Microsoft.Win32.SaveFileDialog
         {
             Filter = "XPS документ (*.xps)|*.xps",
@@ -2382,25 +2429,22 @@ public partial class GanttChartControl : UserControl
 
         try
         {
-            // Получаем реальные размеры диаграммы 
-            var chartStart = GetChartStart();
-            var chartWidth = GetChartEnd()-GetChartStart();
+            var exportData = GetExportData();
+            if (exportData == null)
+            {
+                MessageBox.Show("Нет данных для экспорта.", "Ошибка", MessageBoxButton.OK, MessageBoxImage.Warning);
+                return false;
+            }
 
-            // Получаем ссылки на все необходимые Canvas
-            var gridCanvas = GridLayer; // Предполагая, что у вас есть доступ к GridLayer
-            var headerCanvas = HeaderCanvas;
-            var chartCanvas = TaskLayer;
+            // Создаём DocumentExportData только с GanttChart (без EngagementStrip)
+            var documentData = new DocumentExportData
+            {
+                GanttChart = exportData,
+                EngagementStrip = null
+            };
 
-            // Выполняем экспорт
-            ExportToXpsFile(
-                chartCanvas,
-                headerCanvas,
-                gridCanvas, 
-                chartStart,
-                chartWidth,
-                saveDialog.FileName);
+            DocumentExportService.ExportToXps(documentData, saveDialog.FileName);
 
-            // Опционально: открыть файл после сохранения
             var result = MessageBox.Show(
                 "XPS документ успешно сохранён. Открыть файл?",
                 "Экспорт завершён",
@@ -2426,29 +2470,6 @@ public partial class GanttChartControl : UserControl
                 MessageBoxButton.OK,
                 MessageBoxImage.Error);
             return false;
-        }
-    }
-
-    public void ExportToXpsFile(
-        Canvas chartCanvas, 
-        Canvas headerCanvas,
-        Canvas gridCanvas,
-        double chartStart,
-        double charWidth,
-        string filePath)
-    {
-        try
-        {
-            // Получаем Canvas с линией Today, переиспользуя логику рендеринга
-            var todayCanvas = GetTodayLayerForExport();
-            XpsService.SaveHeaderAndChartToXps_FixedPage(headerCanvas, chartCanvas, gridCanvas, todayCanvas,chartStart, charWidth, filePath);
-            
-            //XpsService.SaveHeaderAndChartToXps_FixedPage(todayCanvas, todayCanvas, todayCanvas, todayCanvas,chartStart, charWidth, filePath);
-        }
-        catch (Exception ex)
-        {
-            // Упрощенная обработка ошибок
-            throw new Exception($"Ошибка экспорта в XPS: {ex.Message}", ex);
         }
     }
 

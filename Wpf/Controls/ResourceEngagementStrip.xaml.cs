@@ -4,6 +4,7 @@ using System.Windows.Media;
 using System.Windows.Shapes;
 using Core.Models;
 using Core.Services;
+using Wpf.Services.Export;
 
 namespace Wpf.Controls;
 
@@ -553,6 +554,58 @@ public partial class ResourceEngagementStrip : UserControl
             };
             EngagementCanvas.Children.Add(line);
         }
+    }
+
+    #endregion
+    
+    #region Export Data Provider
+
+    /// <summary>
+    /// Возвращает данные полосы загрузки для экспорта.
+    /// </summary>
+    public EngagementStripExportData? GetExportData()
+    {
+        if (ResourceService == null || ProjectManager == null)
+            return null;
+
+        var resources = ResourceService.Resources.ToList();
+        if (resources.Count == 0)
+            return null;
+
+        // Убеждаемся, что Canvas отрендерен
+        if (EngagementCanvas.ActualWidth <= 0 || EngagementCanvas.ActualHeight <= 0)
+        {
+            Refresh();
+        }
+
+        return new EngagementStripExportData
+        {
+            Engagement = new ExportLayerData
+            {
+                Canvas = EngagementCanvas,
+                Width = EngagementCanvas.Width > 0 ? EngagementCanvas.Width : EngagementCanvas.ActualWidth,
+                Height = EngagementCanvas.Height > 0 ? EngagementCanvas.Height : EngagementCanvas.ActualHeight,
+                Name = "Engagement"
+            },
+            ColumnWidth = ColumnWidth,
+            RowHeight = RowHeight,
+            ResourceCount = resources.Count
+        };
+    }
+
+    /// <summary>
+    /// Принудительно обновляет и возвращает данные для экспорта.
+    /// Гарантирует, что Canvas содержит актуальные данные.
+    /// </summary>
+    public EngagementStripExportData? GetExportDataForced()
+    {
+        // Принудительно перерисовываем
+        Refresh();
+    
+        // Ждём завершения рендеринга
+        Dispatcher.Invoke(() => { }, System.Windows.Threading.DispatcherPriority.Render);
+    
+        return GetExportData();
     }
 
     #endregion
