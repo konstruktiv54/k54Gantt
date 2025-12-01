@@ -17,6 +17,12 @@ public partial class ResourceViewModel : ObservableObject
     private readonly ResourceService _resourceService;
 
     #region Observable Properties
+    
+    /// <summary>
+    /// Дата начала проекта (для конвертера дат).
+    /// </summary>
+    [ObservableProperty]
+    private DateTime _projectStart = DateTime.Today;
 
     /// <summary>
     /// Коллекция ресурсов для отображения.

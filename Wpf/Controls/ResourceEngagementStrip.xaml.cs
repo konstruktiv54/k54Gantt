@@ -1,7 +1,5 @@
-using System.Diagnostics;
 using System.Windows;
 using System.Windows.Controls;
-using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Shapes;
 using Core.Models;
@@ -11,6 +9,7 @@ namespace Wpf.Controls;
 
 /// <summary>
 /// Визуализация вовлечённости ресурсов по дням.
+/// Автоматически обновляется при изменении данных в ResourceService.
 /// </summary>
 public partial class ResourceEngagementStrip : UserControl
 {
@@ -28,7 +27,7 @@ public partial class ResourceEngagementStrip : UserControl
     
     public static readonly DependencyProperty ResourceServiceProperty =
         DependencyProperty.Register(nameof(ResourceService), typeof(ResourceService),
-            typeof(ResourceEngagementStrip), new PropertyMetadata(null, OnServiceChanged));
+            typeof(ResourceEngagementStrip), new PropertyMetadata(null, OnResourceServiceChanged));
 
     public static readonly DependencyProperty EngagementServiceProperty =
         DependencyProperty.Register(nameof(EngagementService), typeof(EngagementCalculationService),
@@ -36,7 +35,7 @@ public partial class ResourceEngagementStrip : UserControl
 
     public static readonly DependencyProperty ProjectManagerProperty =
         DependencyProperty.Register(nameof(ProjectManager), typeof(ProjectManager),
-            typeof(ResourceEngagementStrip), new PropertyMetadata(null, OnServiceChanged));
+            typeof(ResourceEngagementStrip), new PropertyMetadata(null, OnProjectManagerChanged));
 
     public static readonly DependencyProperty ColumnWidthProperty =
         DependencyProperty.Register(nameof(ColumnWidth), typeof(double),
@@ -87,13 +86,15 @@ public partial class ResourceEngagementStrip : UserControl
     #region Constants
 
     private const double RowHeight = 24;
-    private const int VisibleDaysBuffer = 5; // Дополнительные дни за пределами viewport
+    private const int VisibleDaysBuffer = 5;
 
     #endregion
 
     #region Fields
 
     private bool _isUpdatingScroll;
+    private ResourceService? _subscribedResourceService;
+    private ProjectManager? _subscribedProjectManager;
 
     #endregion
 
@@ -101,6 +102,7 @@ public partial class ResourceEngagementStrip : UserControl
     {
         InitializeComponent();
         Loaded += OnLoaded;
+        Unloaded += OnUnloaded;
         SizeChanged += OnSizeChanged;
     }
 
@@ -111,9 +113,44 @@ public partial class ResourceEngagementStrip : UserControl
         Refresh();
     }
 
+    private void OnUnloaded(object sender, RoutedEventArgs e)
+    {
+        // Отписываемся от событий при выгрузке контрола
+        UnsubscribeFromResourceService();
+        UnsubscribeFromProjectManager();
+    }
+
     private void OnSizeChanged(object sender, SizeChangedEventArgs e)
     {
         Refresh();
+    }
+
+    private static void OnResourceServiceChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
+    {
+        if (d is ResourceEngagementStrip strip)
+        {
+            // Отписываемся от старого сервиса
+            strip.UnsubscribeFromResourceService();
+            
+            // Подписываемся на новый
+            strip.SubscribeToResourceService();
+            
+            strip.Refresh();
+        }
+    }
+
+    private static void OnProjectManagerChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
+    {
+        if (d is ResourceEngagementStrip strip)
+        {
+            // Отписываемся от старого ProjectManager
+            strip.UnsubscribeFromProjectManager();
+            
+            // Подписываемся на новый
+            strip.SubscribeToProjectManager();
+            
+            strip.Refresh();
+        }
     }
 
     private static void OnServiceChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
@@ -128,7 +165,6 @@ public partial class ResourceEngagementStrip : UserControl
     {
         if (d is ResourceEngagementStrip strip)
         {
-            // Render priority для немедленного отклика на зум
             strip.Dispatcher.BeginInvoke(strip.Refresh, System.Windows.Threading.DispatcherPriority.Render);
         }
     }
@@ -152,8 +188,83 @@ public partial class ResourceEngagementStrip : UserControl
             _isUpdatingScroll = false;
         }
 
-        // Синхронизируем вертикальный скролл имён
         NamesScrollViewer.ScrollToVerticalOffset(e.VerticalOffset);
+    }
+
+    #endregion
+
+    #region ResourceService Subscription
+
+    private void SubscribeToResourceService()
+    {
+        if (ResourceService == null || _subscribedResourceService == ResourceService)
+            return;
+
+        _subscribedResourceService = ResourceService;
+
+        ResourceService.ResourcesChanged += OnResourceServiceDataChanged;
+        ResourceService.AssignmentsChanged += OnResourceServiceDataChanged;
+        ResourceService.ParticipationIntervalsChanged += OnResourceServiceDataChanged;
+        ResourceService.AbsencesChanged += OnResourceServiceDataChanged;
+    }
+
+    private void UnsubscribeFromResourceService()
+    {
+        if (_subscribedResourceService == null)
+            return;
+
+        _subscribedResourceService.ResourcesChanged -= OnResourceServiceDataChanged;
+        _subscribedResourceService.AssignmentsChanged -= OnResourceServiceDataChanged;
+        _subscribedResourceService.ParticipationIntervalsChanged -= OnResourceServiceDataChanged;
+        _subscribedResourceService.AbsencesChanged -= OnResourceServiceDataChanged;
+
+        _subscribedResourceService = null;
+    }
+
+    private void OnResourceServiceDataChanged(object? sender, EventArgs e)
+    {
+        // Обновляем через Dispatcher для thread-safety
+        if (!Dispatcher.CheckAccess())
+        {
+            Dispatcher.BeginInvoke(new Action(Refresh));
+            return;
+        }
+
+        Refresh();
+    }
+
+    #endregion
+
+    #region ProjectManager Subscription
+
+    private void SubscribeToProjectManager()
+    {
+        if (ProjectManager == null || _subscribedProjectManager == ProjectManager)
+            return;
+
+        _subscribedProjectManager = ProjectManager;
+        ProjectManager.ScheduleChanged += OnProjectManagerScheduleChanged;
+    }
+
+    private void UnsubscribeFromProjectManager()
+    {
+        if (_subscribedProjectManager == null)
+            return;
+
+        _subscribedProjectManager.ScheduleChanged -= OnProjectManagerScheduleChanged;
+        _subscribedProjectManager = null;
+    }
+
+    private void OnProjectManagerScheduleChanged(object? sender, EventArgs e)
+    {
+        // Обновляем через Dispatcher для thread-safety
+        if (!Dispatcher.CheckAccess())
+        {
+            Dispatcher.BeginInvoke(new Action(Refresh));
+            return;
+        }
+
+        Refresh();
     }
 
     #endregion
@@ -166,9 +277,7 @@ public partial class ResourceEngagementStrip : UserControl
     public void Refresh()
     {
         if (!IsLoaded)
-        {
             return;
-        }
     
         if (!Dispatcher.CheckAccess())
         {
@@ -185,25 +294,20 @@ public partial class ResourceEngagementStrip : UserControl
         if (resources.Count == 0)
             return;
 
-        // Определяем диапазон дней
         var (startDay, endDay) = GetVisibleDayRange();
         var totalDays = (int)(endDay - startDay).TotalDays + 1;
         
-        // Устанавливаем размер Canvas
         EngagementCanvas.Width = totalDays * ColumnWidth;
         EngagementCanvas.Height = resources.Count * RowHeight;
 
-        // Обновляем DataContext для имён
         ResourceNamesPanel.ItemsSource = resources;
 
-        // Рисуем ячейки
         for (int resourceIndex = 0; resourceIndex < resources.Count; resourceIndex++)
         {
             var resource = resources[resourceIndex];
             DrawResourceRow(resource, resourceIndex, startDay, totalDays);
         }
 
-        // Рисуем вертикальные линии сетки
         DrawGridLines(totalDays, resources.Count);
     }
 
@@ -221,7 +325,6 @@ public partial class ResourceEngagementStrip : UserControl
         var minStart = ProjectManager.Tasks.Min(t => t.Start);
         var maxEnd = ProjectManager.Tasks.Max(t => t.End);
 
-        // Добавляем buffer
         minStart -= TimeSpan.FromDays(VisibleDaysBuffer);
         maxEnd += TimeSpan.FromDays(VisibleDaysBuffer);
 
@@ -240,7 +343,6 @@ public partial class ResourceEngagementStrip : UserControl
             var day = startDay + TimeSpan.FromDays(dayOffset);
             var x = dayOffset * ColumnWidth;
 
-            // Получаем статус дня
             DayState state;
             int allocationPercent = 0;
             int maxWorkload = 100;
@@ -256,7 +358,6 @@ public partial class ResourceEngagementStrip : UserControl
             }
             else
             {
-                // Fallback без EngagementService
                 state = ResourceService!.IsResourceAbsent(resource.Id, day) 
                     ? DayState.Absence 
                     : (ResourceService.IsResourceParticipating(resource.Id, day) 
@@ -264,14 +365,12 @@ public partial class ResourceEngagementStrip : UserControl
                         : DayState.NotParticipating);
             }
 
-            // Создаём ячейку
             var cell = CreateCell(state, resource.ColorHex, allocationPercent, maxWorkload, tooltipText);
             Canvas.SetLeft(cell, x);
             Canvas.SetTop(cell, y);
             EngagementCanvas.Children.Add(cell);
         }
 
-        // Горизонтальная линия под строкой
         var line = new Line
         {
             X1 = 0,
@@ -298,7 +397,6 @@ public partial class ResourceEngagementStrip : UserControl
             ToolTip = string.IsNullOrEmpty(tooltip) ? null : tooltip
         };
 
-        // Штриховка для Absence
         if (state == DayState.Absence)
         {
             cell.Fill = CreateHatchBrush();

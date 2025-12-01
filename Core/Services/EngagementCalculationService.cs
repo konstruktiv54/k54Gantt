@@ -12,6 +12,11 @@ public class EngagementCalculationService
     private ProjectManager? _projectManager;
 
     /// <summary>
+    /// Порог завершённости, при котором задача считается выполненной (100%).
+    /// </summary>
+    private const float CompletionThreshold = 0.9999f;
+
+    /// <summary>
     /// Создаёт сервис расчёта вовлечённости.
     /// </summary>
     /// <param name="resourceService">Сервис управления ресурсами.</param>
@@ -61,6 +66,7 @@ public class EngagementCalculationService
     /// <summary>
     /// Рассчитывает процент загрузки ресурса на конкретный день.
     /// Формула: Σ(Assignment.Workload × RoleCoefficient)
+    /// Примечание: Завершённые задачи (Complete = 100%) не учитываются.
     /// </summary>
     /// <param name="resourceId">ID ресурса.</param>
     /// <param name="day">День (смещение от начала проекта).</param>
@@ -102,7 +108,7 @@ public class EngagementCalculationService
         // 2. Проверяем отсутствие
         bool inAbsence = _resourceService.IsResourceAbsent(resourceId, day);
 
-        // 3. Получаем назначения и загрузку
+        // 3. Получаем назначения и загрузку (завершённые задачи уже отфильтрованы)
         var assignments = GetAssignmentsForDay(resourceId, day);
         int allocationPercent = CalculateAllocationPercent(resourceId, day);
         bool hasAssignments = assignments.Count > 0;
@@ -161,7 +167,7 @@ public class EngagementCalculationService
         bool inAbsence = absence != null;
         string? absenceReason = absence?.Reason;
 
-        // Назначения и загрузка
+        // Назначения и загрузка (завершённые задачи уже отфильтрованы)
         var assignments = GetAssignmentsForDay(resourceId, day);
         int allocationPercent = CalculateAllocationPercentInternal(resource.Role, assignments);
 
@@ -223,10 +229,11 @@ public class EngagementCalculationService
 
     /// <summary>
     /// Получает назначения ресурса на конкретный день.
+    /// Учитывает только активные (незавершённые) задачи.
     /// </summary>
     /// <param name="resourceId">ID ресурса.</param>
     /// <param name="day">День.</param>
-    /// <returns>Список назначений.</returns>
+    /// <returns>Список назначений на незавершённые задачи.</returns>
     public List<ResourceAssignment> GetAssignmentsForDay(Guid resourceId, TimeSpan day)
     {
         if (_projectManager == null)
@@ -241,7 +248,42 @@ public class EngagementCalculationService
             if (task == null)
                 continue;
 
+            // Пропускаем завершённые задачи (Complete >= 100%)
+            if (task.Complete >= CompletionThreshold)
+                continue;
+
             // Проверяем, попадает ли день в период задачи [Start, Start + Duration)
+            if (day >= task.Start && day < task.Start + task.Duration)
+            {
+                result.Add(assignment);
+            }
+        }
+
+        return result;
+    }
+
+    /// <summary>
+    /// Получает все назначения на день, включая завершённые задачи.
+    /// Используется для отображения истории или отчётов.
+    /// </summary>
+    /// <param name="resourceId">ID ресурса.</param>
+    /// <param name="day">День.</param>
+    /// <returns>Список всех назначений (включая завершённые).</returns>
+    public List<ResourceAssignment> GetAllAssignmentsForDay(Guid resourceId, TimeSpan day)
+    {
+        if (_projectManager == null)
+            return new List<ResourceAssignment>();
+
+        var allAssignments = _resourceService.GetAssignmentsByResource(resourceId);
+        var result = new List<ResourceAssignment>();
+
+        foreach (var assignment in allAssignments)
+        {
+            var task = _projectManager.GetTaskById(assignment.TaskId);
+            if (task == null)
+                continue;
+
+            // Проверяем, попадает ли день в период задачи
             if (day >= task.Start && day < task.Start + task.Duration)
             {
                 result.Add(assignment);

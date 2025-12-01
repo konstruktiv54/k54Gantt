@@ -36,6 +36,50 @@ public class ProjectManager<T, TR> : IProjectManager<T, TR>
     Dictionary<T, T> _mGroupOfMember = new Dictionary<T, T>(); // Map member task to parent group task
     Dictionary<T, int> _mTaskIndices = new Dictionary<T, int>(); // Map the task to its zero-based index order position
 
+    #region Events
+
+    /// <summary>
+    /// Событие, возникающее при любом изменении расписания (задачи, связи, даты).
+    /// </summary>
+    public event EventHandler? ScheduleChanged;
+
+    /// <summary>
+    /// Флаг для временной приостановки событий (batch operations).
+    /// </summary>
+    private bool _suppressEvents;
+
+    /// <summary>
+    /// Вызывает событие ScheduleChanged, если события не подавлены.
+    /// </summary>
+    protected virtual void OnScheduleChanged()
+    {
+        if (!_suppressEvents)
+        {
+            ScheduleChanged?.Invoke(this, EventArgs.Empty);
+        }
+    }
+
+    /// <summary>
+    /// Выполняет действие с подавлением событий, вызывая одно событие в конце.
+    /// Используется для batch-операций.
+    /// </summary>
+    /// <param name="action">Действие для выполнения.</param>
+    public void BatchUpdate(Action action)
+    {
+        _suppressEvents = true;
+        try
+        {
+            action();
+        }
+        finally
+        {
+            _suppressEvents = false;
+            OnScheduleChanged();
+        }
+    }
+
+    #endregion
+
     /// <summary>
     /// Create a new Project
     /// </summary>
@@ -123,6 +167,8 @@ public class ProjectManager<T, TR> : IProjectManager<T, TR>
             _mDependantsOfPrecedent[task] = new HashSet<T>();
             _mResourcesOfTask[task] = new HashSet<TR>();
             _mGroupOfMember[task] = null;
+            
+            OnScheduleChanged();
         }
     }
 
@@ -153,6 +199,8 @@ public class ProjectManager<T, TR> : IProjectManager<T, TR>
             foreach (var g in _mMembersOfGroup) g.Value.Remove(task); // optimised: no need to check for contains
             foreach (var g in _mDependantsOfPrecedent) g.Value.Remove(task);
             _mRegister.Remove(task);
+            
+            OnScheduleChanged();
         }
         else if (task != null
                  && _mSplitTaskOfPart.ContainsKey(task) // must be existing part
@@ -170,6 +218,8 @@ public class ProjectManager<T, TR> : IProjectManager<T, TR>
                 split.Start = parts.First().Start; // recalculate the split task
                 split.End = parts.Last().End;
                 split.Duration = split.End - split.Start;
+                
+                OnScheduleChanged();
             }
             else
             {
@@ -211,6 +261,8 @@ public class ProjectManager<T, TR> : IProjectManager<T, TR>
                 _RecalculateSlack();
                 // clear indices since positions changed
                 _mTaskIndices.Clear();
+                
+                OnScheduleChanged();
             }
         }
     }
@@ -238,6 +290,8 @@ public class ProjectManager<T, TR> : IProjectManager<T, TR>
                 _mGroupOfMember[member] = null;
 
                 _RecalculateAncestorsSchedule();
+                
+                OnScheduleChanged();
             }
         }
     }
@@ -275,6 +329,8 @@ public class ProjectManager<T, TR> : IProjectManager<T, TR>
             members.Clear();
 
             _RecalculateAncestorsSchedule();
+            
+            OnScheduleChanged();
         }
     }
 
@@ -367,6 +423,8 @@ public class ProjectManager<T, TR> : IProjectManager<T, TR>
 
                 // clear indices since positions changed
                 _mTaskIndices.Clear();
+                
+                OnScheduleChanged();
             }
         }
     }
@@ -486,6 +544,8 @@ public class ProjectManager<T, TR> : IProjectManager<T, TR>
             {
                 _mTaskIndices[task] = index++;
             }
+            
+            OnScheduleChanged();
         }
     }
 
@@ -752,6 +812,8 @@ public class ProjectManager<T, TR> : IProjectManager<T, TR>
                 _RecalculateDependantsOf(precedent);
                 _RecalculateAncestorsSchedule();
                 _RecalculateSlack();
+                
+                OnScheduleChanged();
             }
         }
     }
@@ -771,6 +833,8 @@ public class ProjectManager<T, TR> : IProjectManager<T, TR>
             _mDependantsOfPrecedent[precedent].Remove(dependant);
 
             _RecalculateSlack();
+            
+            OnScheduleChanged();
         }
     }
 
@@ -788,6 +852,8 @@ public class ProjectManager<T, TR> : IProjectManager<T, TR>
             _mDependantsOfPrecedent[precedent].Clear();
 
             _RecalculateSlack();
+            
+            OnScheduleChanged();
         }
     }
 
@@ -799,7 +865,10 @@ public class ProjectManager<T, TR> : IProjectManager<T, TR>
     public void Assign(T task, TR resource)
     {
         if (_mRegister.Contains(task) && !_mResourcesOfTask[task].Contains(resource))
+        {
             _mResourcesOfTask[task].Add(resource);
+            OnScheduleChanged();
+        }
     }
 
     /// <summary>
@@ -810,6 +879,7 @@ public class ProjectManager<T, TR> : IProjectManager<T, TR>
     public void Unassign(T task, TR resource)
     {
         _mResourcesOfTask[task].Remove(resource);
+        OnScheduleChanged();
     }
 
     /// <summary>
@@ -819,7 +889,10 @@ public class ProjectManager<T, TR> : IProjectManager<T, TR>
     public void Unassign(T task)
     {
         if (_mRegister.Contains(task))
+        {
             _mResourcesOfTask[task].Clear();
+            OnScheduleChanged();
+        }
     }
 
     /// <summary>
@@ -830,6 +903,8 @@ public class ProjectManager<T, TR> : IProjectManager<T, TR>
     {
         foreach (var r in _mResourcesOfTask.Where(x => x.Value.Contains(resource)))
             r.Value.Remove(resource);
+        
+        OnScheduleChanged();
     }
 
     /// <summary>
@@ -886,6 +961,8 @@ public class ProjectManager<T, TR> : IProjectManager<T, TR>
 
             _RecalculateAncestorsSchedule();
             _RecalculateSlack();
+            
+            OnScheduleChanged();
         }
         // Set start for a group task
         else if (_mRegister.Contains(task) && value != task.Start && IsGroup(task))
@@ -894,6 +971,8 @@ public class ProjectManager<T, TR> : IProjectManager<T, TR>
 
             _RecalculateAncestorsSchedule();
             _RecalculateSlack();
+            
+            OnScheduleChanged();
         }
     }
 
@@ -909,6 +988,8 @@ public class ProjectManager<T, TR> : IProjectManager<T, TR>
         _SetEndHelper(task, value);
         _RecalculateAncestorsSchedule();
         _RecalculateSlack();
+        
+        OnScheduleChanged();
     }
 
     /// <summary>
@@ -941,6 +1022,8 @@ public class ProjectManager<T, TR> : IProjectManager<T, TR>
         _SetCompleteHelper(task, complete);
 
         _RecalculateComplete();
+        
+        OnScheduleChanged();
     }
 
     /// <summary>
@@ -953,6 +1036,7 @@ public class ProjectManager<T, TR> : IProjectManager<T, TR>
         if (_mRegister.Contains(task) && IsGroup(task))
         {
             task.IsCollapsed = collasped;
+            OnScheduleChanged();
         }
     }
 
@@ -1053,6 +1137,8 @@ public class ProjectManager<T, TR> : IProjectManager<T, TR>
 
         _RecalculateDependantsOf(split);
         _RecalculateAncestorsSchedule();
+        
+        OnScheduleChanged();
     }
 
     /// <summary>
@@ -1120,6 +1206,8 @@ public class ProjectManager<T, TR> : IProjectManager<T, TR>
             split.Start = parts.First().Start;
 
             _RecalculateAncestorsSchedule();
+            
+            OnScheduleChanged();
         }
         else
         {
@@ -1156,6 +1244,8 @@ public class ProjectManager<T, TR> : IProjectManager<T, TR>
 
             // set the duration
             SetDuration(split, duration);
+            
+            // SetDuration вызовет OnScheduleChanged
         }
     }
 
@@ -1386,6 +1476,8 @@ public class ProjectManager<T, TR> : IProjectManager<T, TR>
         {
             task.Deadline = null;
         }
+        
+        OnScheduleChanged();
     }
     
     /// <summary>
@@ -1396,6 +1488,7 @@ public class ProjectManager<T, TR> : IProjectManager<T, TR>
         if (_mRegister.Contains(task))
         {
             task.Note = note;
+            OnScheduleChanged();
         }
     }
 

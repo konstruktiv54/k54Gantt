@@ -5,6 +5,7 @@ using System.Windows.Controls;
 using System.Windows.Media;
 using Core.Services;
 using Wpf.ViewModels;
+using Wpf.Converters;
 
 namespace Wpf.Views;
 
@@ -15,10 +16,18 @@ public partial class ResourceManagerDialog : Window
 {
     private ResourceViewModel ViewModel => (ResourceViewModel)DataContext;
 
-    public ResourceManagerDialog(ResourceService resourceService)
+    public ResourceManagerDialog(ResourceService resourceService, DateTime projectStart)
     {
         InitializeComponent();
-        DataContext = new ResourceViewModel(resourceService);
+        
+        var viewModel = new ResourceViewModel(resourceService)
+        {
+            ProjectStart = projectStart
+        };
+        DataContext = viewModel;
+        
+        // Устанавливаем ProjectStart для статического конвертера
+        TimeSpanDateConverter.ProjectStart = projectStart;
     }
 
     private void CloseButton_Click(object sender, RoutedEventArgs e)

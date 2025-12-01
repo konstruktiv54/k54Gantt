@@ -501,7 +501,8 @@ public partial class MainViewModel : ObservableObject
     [RelayCommand]
     private void ManageResources()
     {
-        var dialog = new ResourceManagerDialog(_resourceService)
+        var projectStart = ProjectManager?.Start ?? DateTime.Today;
+        var dialog = new ResourceManagerDialog(_resourceService, projectStart)
         {
             Owner = Application.Current.MainWindow
         };
@@ -510,6 +511,7 @@ public partial class MainViewModel : ObservableObject
 
         // Перерисовываем диаграмму для обновления инициалов
         StatusText = $"Ресурсов: {_resourceService.ResourceCount}";
+        OnPropertyChanged(nameof(Resources));
     }
 
     /// <summary>
