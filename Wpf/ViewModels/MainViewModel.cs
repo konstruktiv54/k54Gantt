@@ -37,6 +37,7 @@ public partial class MainViewModel : ObservableObject
     private bool _isSyncingSelection;
     private Timer? _flatListUpdateTimer;
     private const int DebounceDelayMs = 50;
+    private readonly AutoSaveManager _autoSaveManager;
 
     #endregion
 
@@ -268,11 +269,13 @@ public partial class MainViewModel : ObservableObject
     public MainViewModel(
         FileService fileService, 
         ResourceService resourceService,
-        EngagementCalculationService engagementService)
+        EngagementCalculationService engagementService,
+        AutoSaveManager autoSaveManager)
     {
         _fileService = fileService;
         _resourceService = resourceService;
-        _engagementService = engagementService;  // ← сохраняем
+        _engagementService = engagementService;
+        _autoSaveManager = autoSaveManager;
 
         // Связываем FileService с ResourceService
         _fileService.ResourceService = _resourceService;
@@ -320,6 +323,7 @@ public partial class MainViewModel : ObservableObject
 
         CreateNewProject();
         StatusText = "Создан новый проект";
+        _autoSaveManager.StartAutoSave();
     }
 
     /// <summary>
@@ -334,29 +338,27 @@ public partial class MainViewModel : ObservableObject
             Title = "Открыть проект"
         };
 
-        if (dialog.ShowDialog() == true)
+        if (dialog.ShowDialog() != true) return;
+        try
         {
-            try
-            {
-                ProjectManager = _fileService.Load(dialog.FileName);
-                CurrentFilePath = dialog.FileName;
-                UpdateWindowTitle();
-                UpdateTaskCount();
-                HasUnsavedChanges = false;
+            ProjectManager = _fileService.Load(dialog.FileName);
+            CurrentFilePath = dialog.FileName;
+            UpdateWindowTitle();
+            UpdateTaskCount();
+            HasUnsavedChanges = false;
 
-                // Сохраняем путь к последнему файлу
-                SettingsService.LastOpenedFile = dialog.FileName;
-
-                StatusText = $"Загружен проект: {System.IO.Path.GetFileName(dialog.FileName)}";
-            }
-            catch (Exception ex)
-            {
-                MessageBox.Show(
-                    $"Ошибка загрузки файла:\n{ex.Message}",
-                    "Ошибка",
-                    MessageBoxButton.OK,
-                    MessageBoxImage.Error);
-            }
+            // Сохраняем путь к последнему файлу
+            SettingsService.LastOpenedFile = dialog.FileName;
+            _autoSaveManager.StartAutoSave();
+            StatusText = $"Загружен проект: {System.IO.Path.GetFileName(dialog.FileName)}";
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show(
+                $"Ошибка загрузки файла:\n{ex.Message}",
+                "Ошибка",
+                MessageBoxButton.OK,
+                MessageBoxImage.Error);
         }
     }
 

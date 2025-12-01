@@ -1,6 +1,7 @@
 ﻿using System.Windows;
 using Core.Services;
 using Microsoft.Extensions.DependencyInjection;
+using Wpf.Services;
 using Wpf.ViewModels;
 using Wpf.Views;
 
@@ -48,6 +49,7 @@ public partial class App : Application
         // EngagementCalculationService — зависит от ResourceService,
         // ProjectManager устанавливается позже через свойство
         services.AddSingleton<EngagementCalculationService>();
+        services.AddSingleton<AutoSaveManager>();
 
         // ViewModels
         services.AddTransient<MainViewModel>();
