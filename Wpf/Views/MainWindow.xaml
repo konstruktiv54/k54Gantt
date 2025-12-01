@@ -228,7 +228,7 @@
             <Grid.RowDefinitions>
                 <RowDefinition Height="*"/>
                 <RowDefinition Height="Auto"/>
-                <RowDefinition Height="150" MinHeight="80" MaxHeight="300"/>
+                <RowDefinition Height="150" MinHeight="80" MaxHeight="500"/>
             </Grid.RowDefinitions>
             
             <Grid.ColumnDefinitions>

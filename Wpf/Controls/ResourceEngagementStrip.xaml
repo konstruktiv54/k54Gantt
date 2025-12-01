@@ -72,7 +72,8 @@
                       Grid.Column="1"
                       HorizontalScrollBarVisibility="Hidden"
                       VerticalScrollBarVisibility="Auto"
-                      ScrollChanged="TimelineScrollViewer_ScrollChanged">
+                      ScrollChanged="TimelineScrollViewer_ScrollChanged"
+                      VerticalAlignment="Top">
             <Canvas x:Name="EngagementCanvas"
                     Background="White"
                     ClipToBounds="True"/>
