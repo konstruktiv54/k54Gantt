@@ -42,14 +42,11 @@ public partial class App : Application
     /// </summary>
     private static void ConfigureServices(IServiceCollection services)
     {
-        // Core Services (Singleton - один экземпляр на всё приложение)
         services.AddSingleton<FileService>();
         services.AddSingleton<ResourceService>();
-        
-        // EngagementCalculationService — зависит от ResourceService,
-        // ProjectManager устанавливается позже через свойство
         services.AddSingleton<EngagementCalculationService>();
         services.AddSingleton<AutoSaveManager>();
+        services.AddSingleton<TaskCopyService>();
 
         // ViewModels
         services.AddTransient<MainViewModel>();

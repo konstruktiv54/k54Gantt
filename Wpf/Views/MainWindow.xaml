@@ -37,6 +37,8 @@
         <KeyBinding Key="G" Modifiers="Control" Command="{Binding MakeGroupCommand}"/>
         <KeyBinding Key="G" Modifiers="Control+Shift" Command="{Binding UngroupCommand}"/>
         <KeyBinding Key="Delete" Command="{Binding DeleteTaskCommand}"/>
+        <KeyBinding Key="C" Modifiers="Ctrl" Command="{Binding CopyTaskCommand}" />
+        <KeyBinding Key="V" Modifiers="Ctrl" Command="{Binding PasteTaskCommand}" />
         <KeyBinding Key="F2" Command="{Binding EditNoteCommand}"/>
     </Window.InputBindings>
 
@@ -161,6 +163,22 @@
                           Command="{Binding UngroupCommand}"
                           InputGestureText="Ctrl+Shift+G"/>
                 <Separator/>
+                <MenuItem Header="_Копировать" 
+                          Command="{Binding CopyTaskCommand}"
+                          InputGestureText="Ctrl+C">
+                    <MenuItem.Icon>
+                        <materialDesign:PackIcon Kind="ContentCopy" />
+                    </MenuItem.Icon>
+                </MenuItem>
+        
+                <MenuItem Header="_Вставить" 
+                          Command="{Binding PasteTaskCommand}"
+                          InputGestureText="Ctrl+V">
+                    <MenuItem.Icon>
+                        <materialDesign:PackIcon Kind="ContentPaste" />
+                    </MenuItem.Icon>
+                </MenuItem>
+                <Separator />
                 <MenuItem Header="Удалить" 
                           Command="{Binding DeleteTaskCommand}"
                           InputGestureText="Del"/>

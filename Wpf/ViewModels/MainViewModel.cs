@@ -25,6 +25,7 @@ public partial class MainViewModel : ObservableObject
 
     private readonly FileService _fileService;
     private readonly ResourceService _resourceService;
+    private readonly TaskCopyService _copyService;
     
     public Func<string?, bool>? ExportToPdfAction { get; set; }
     public Func<string?, bool>? PrintAction { get; set; }
@@ -38,6 +39,7 @@ public partial class MainViewModel : ObservableObject
     private Timer? _flatListUpdateTimer;
     private const int DebounceDelayMs = 50;
     private readonly AutoSaveManager _autoSaveManager;
+    private TaskClipboard? _clipboard;
 
     #endregion
 
@@ -134,6 +136,7 @@ public partial class MainViewModel : ObservableObject
             {
                 SelectedTaskItem = null;
             }
+            CopyTaskCommand.NotifyCanExecuteChanged();
         }
         finally
         {
@@ -270,12 +273,14 @@ public partial class MainViewModel : ObservableObject
         FileService fileService, 
         ResourceService resourceService,
         EngagementCalculationService engagementService,
-        AutoSaveManager autoSaveManager)
+        AutoSaveManager autoSaveManager,
+        TaskCopyService copyService)
     {
         _fileService = fileService;
         _resourceService = resourceService;
         _engagementService = engagementService;
         _autoSaveManager = autoSaveManager;
+        _copyService = copyService;
 
         // Связываем FileService с ResourceService
         _fileService.ResourceService = _resourceService;
@@ -1207,6 +1212,10 @@ public partial class MainViewModel : ObservableObject
         OnPropertyChanged(nameof(CanAddSubtask));
         OnPropertyChanged(nameof(CanDeleteTask));
         OnPropertyChanged(nameof(CanEditNote));
+        OnPropertyChanged(nameof(CanPaste)); 
+        
+        CopyTaskCommand.NotifyCanExecuteChanged();
+        PasteTaskCommand.NotifyCanExecuteChanged();
     }
     
     private void InitializeHierarchyBuilder()
@@ -1363,6 +1372,111 @@ public partial class MainViewModel : ObservableObject
         StatusText = string.IsNullOrEmpty(SelectedTask.Note) 
             ? $"Добавление заметки к '{SelectedTask.Name}'"
             : $"Редактирование заметки '{SelectedTask.Name}'";
+    }
+
+    #endregion
+
+    #region Copy/Paste Commands
+
+    /// <summary>
+    /// Можно ли выполнить вставку.
+    /// </summary>
+    public bool CanPaste => _clipboard?.HasData == true && ProjectManager != null;
+
+    /// <summary>
+    /// Команда: Копировать задачу.
+    /// </summary>
+    [RelayCommand(CanExecute = nameof(CanCopyTask))]
+    private void CopyTask()
+    {
+        if (ProjectManager == null || SelectedTask == null) return;
+
+        try
+        {
+            _clipboard = _copyService.Copy(SelectedTask, ProjectManager);
+
+            // Уведомляем UI об изменении CanPaste
+            OnPropertyChanged(nameof(CanPaste));
+
+            var totalCount = _clipboard.TotalCount;
+            StatusText = totalCount > 1
+                ? $"Скопировано: '{SelectedTask.Name}' ({totalCount} задач)"
+                : $"Скопировано: '{SelectedTask.Name}'";
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"Copy error: {ex.Message}");
+            StatusText = "Ошибка копирования";
+        }
+    }
+
+    /// <summary>
+    /// Можно ли копировать.
+    /// </summary>
+    private bool CanCopyTask => SelectedTask != null && ProjectManager != null;
+
+    /// <summary>
+    /// Команда: Вставить задачу.
+    /// </summary>
+    [RelayCommand(CanExecute = nameof(CanPasteTask))]
+    private void PasteTask()
+    {
+        if (ProjectManager == null || _clipboard == null || !_clipboard.HasData) return;
+
+        try
+        {
+            // Вставляем после выбранной задачи или в конец
+            var insertAfter = SelectedTask;
+
+            var createdTasks = _copyService.Paste(_clipboard, ProjectManager, insertAfter);
+
+            // Перестраиваем иерархию
+            RebuildHierarchy();
+
+            // Выделяем первую созданную задачу
+            if (createdTasks.Count > 0)
+            {
+                SelectTaskById(createdTasks[0].Id);
+            }
+
+            MarkAsModified();
+
+            var count = createdTasks.Sum(t => CountTaskWithChildren(t));
+            StatusText = count > 1
+                ? $"Вставлено задач: {count}"
+                : $"Вставлена задача: '{createdTasks[0].Name}'";
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"Paste error: {ex.Message}");
+            StatusText = "Ошибка вставки";
+            MessageBox.Show(
+                $"Ошибка при вставке задачи:\n{ex.Message}",
+                "Ошибка",
+                MessageBoxButton.OK,
+                MessageBoxImage.Error);
+        }
+    }
+
+    /// <summary>
+    /// Можно ли вставить.
+    /// </summary>
+    private bool CanPasteTask => _clipboard?.HasData == true && ProjectManager != null;
+
+    /// <summary>
+    /// Подсчитывает задачу и всех её потомков.
+    /// </summary>
+    private int CountTaskWithChildren(Task task)
+    {
+        if (ProjectManager == null) return 1;
+
+        var count = 1;
+        if (ProjectManager.IsGroup(task))
+        {
+            count += ProjectManager.MembersOf(task).Count();
+        }
+
+        return count;
     }
 
     #endregion
