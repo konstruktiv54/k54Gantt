@@ -30,14 +30,10 @@ public class Resource
     public string ColorHex { get; set; } = "#4682B4"; // SteelBlue
 
     /// <summary>
-    /// Роль или должность ресурса.
+    /// Роль ресурса в проекте.
+    /// Определяет коэффициент нагрузки при расчёте вовлечённости.
     /// </summary>
-    public string Role { get; set; } = string.Empty;
-
-    /// <summary>
-    /// Максимальная загрузка ресурса в процентах (по умолчанию 100%).
-    /// </summary>
-    public int MaxWorkload { get; set; } = 100;
+    public ResourceRole Role { get; set; } = ResourceRole.Constructor;
 
     /// <summary>
     /// Дата создания записи о ресурсе.
@@ -73,6 +69,14 @@ public class Resource
     }
 
     /// <summary>
+    /// Возвращает коэффициент нагрузки для роли ресурса.
+    /// </summary>
+    public double GetRoleCoefficient()
+    {
+        return Role.GetCoefficient();
+    }
+
+    /// <summary>
     /// Преобразует в ResourceData для сериализации.
     /// </summary>
     public ResourceData ToData()
@@ -83,8 +87,7 @@ public class Resource
             Name = this.Name,
             Initials = this.Initials,
             Color = this.ColorHex,
-            Role = this.Role,
-            MaxWorkload = this.MaxWorkload
+            Role = (int)this.Role
         };
     }
 
@@ -101,14 +104,45 @@ public class Resource
             Name = data.Name ?? string.Empty,
             Initials = data.Initials ?? string.Empty,
             ColorHex = data.Color ?? "#4682B4",
-            Role = data.Role ?? string.Empty,
-            MaxWorkload = data.MaxWorkload > 0 ? data.MaxWorkload : 100
+            Role = (ResourceRole)data.Role
         };
+    }
+
+    /// <summary>
+    /// Создаёт Resource из старого формата данных (миграция).
+    /// </summary>
+    /// <param name="data">Данные ресурса.</param>
+    /// <param name="roleString">Строковое представление роли (для миграции).</param>
+    /// <returns>Новый объект Resource.</returns>
+    public static Resource FromLegacyData(ResourceData data, string? roleString)
+    {
+        if (data == null) return null;
+
+        var resource = new Resource
+        {
+            Id = data.Id,
+            Name = data.Name ?? string.Empty,
+            Initials = data.Initials ?? string.Empty,
+            ColorHex = data.Color ?? "#4682B4"
+        };
+
+        // Пытаемся парсить роль из строки (старый формат)
+        if (!string.IsNullOrWhiteSpace(roleString))
+        {
+            resource.Role = ResourceRoleExtensions.ParseFromString(roleString);
+        }
+        else
+        {
+            // Если Role уже int, используем его
+            resource.Role = (ResourceRole)data.Role;
+        }
+
+        return resource;
     }
 
     public override string ToString()
     {
-        return $"{Name} ({Initials})";
+        return $"{Name} ({Initials}) - {Role.GetDisplayName()}";
     }
 
     public override bool Equals(object obj)

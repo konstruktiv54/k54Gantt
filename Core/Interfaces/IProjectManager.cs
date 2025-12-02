@@ -15,9 +15,11 @@ public class Task
     {
         Complete = 0.0f;
         Start = TimeSpan.Zero;
-        End = new TimeSpan(1, 0, 0, 0);
-        Duration = new TimeSpan(1, 0, 0, 0);
+        End =  TimeSpan.FromDays(1);
+        Duration = TimeSpan.FromDays(1);
         Slack = TimeSpan.Zero;
+        
+        
     }
         
     /// <summary>
@@ -30,19 +32,19 @@ public class Task
     /// Get the start time of this Task relative to the project start
     /// </summary>
     [JsonProperty("Start")]
-    public TimeSpan Start { get; internal set; }
+    public TimeSpan Start { get; set; }
 
     /// <summary>
     /// Get the end time of this Task relative to the project start
     /// </summary>
     [JsonProperty("End")]
-    public TimeSpan End { get; internal set; }
+    public TimeSpan End { get; set; }
         
     /// <summary>
     /// Get the duration of this Task in days
     /// </summary>
     [JsonProperty("Duration")]
-    public TimeSpan Duration { get; internal set; }
+    public TimeSpan Duration { get; set; }
 
     /// <summary>
     /// Get or set the pecentage complete of this task, expressed in float between 0.0 and 1.0f.
@@ -65,6 +67,25 @@ public class Task
     /// </summary>
     [JsonProperty("Slack")]
     public TimeSpan Slack { get; internal set; }
+    
+    /// <summary>
+    /// Крайний срок выполнения задачи (Deadline).
+    /// Null означает отсутствие дедлайна.
+    /// End не может быть позже Deadline.
+    /// </summary>
+    public TimeSpan? Deadline { get; set; }
+
+    /// <summary>
+    /// Заметка к задаче.
+    /// </summary>
+    public string? Note { get; set; }
+
+    /// <summary>
+    /// Флаг развёрнутости заметки в UI (не сериализуется).
+    /// </summary>
+    [System.Text.Json.Serialization.JsonIgnore]
+    [JsonIgnore]
+    public bool IsNoteExpanded { get; set; }
 
     /// <summary>
     /// Convert this Task to a descriptive string

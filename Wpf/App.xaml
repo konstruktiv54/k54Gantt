@@ -1,5 +1,6 @@
 ﻿<Application x:Class="Wpf.App"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:converters="clr-namespace:Wpf.Converters"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              Startup="OnStartup"
              ShutdownMode="OnMainWindowClose">
@@ -9,7 +10,11 @@
                 <!-- Подключаем стили -->
                 <ResourceDictionary Source="Resources/Colors.xaml"/>
                 <ResourceDictionary Source="Resources/Styles.xaml"/>
+                
             </ResourceDictionary.MergedDictionaries>
+            <converters:BoolToOverdueColorConverter x:Key="BoolToOverdueColorConverter"/>
+            <converters:BoolToVisibilityConverterEx x:Key="BoolToVisibilityConverterEx"/>
+            <converters:NullToVisibilityConverter x:Key="NullToVisibilityConverter"/>
         </ResourceDictionary>
     </Application.Resources>
 </Application>

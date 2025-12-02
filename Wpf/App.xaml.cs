@@ -1,6 +1,7 @@
 ﻿using System.Windows;
 using Core.Services;
 using Microsoft.Extensions.DependencyInjection;
+using Wpf.Services;
 using Wpf.ViewModels;
 using Wpf.Views;
 
@@ -41,9 +42,11 @@ public partial class App : Application
     /// </summary>
     private static void ConfigureServices(IServiceCollection services)
     {
-        // Core Services (Singleton - один экземпляр на всё приложение)
         services.AddSingleton<FileService>();
         services.AddSingleton<ResourceService>();
+        services.AddSingleton<EngagementCalculationService>();
+        services.AddSingleton<AutoSaveManager>();
+        services.AddSingleton<TaskCopyService>();
 
         // ViewModels
         services.AddTransient<MainViewModel>();

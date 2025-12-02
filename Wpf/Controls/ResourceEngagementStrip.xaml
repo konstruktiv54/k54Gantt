@@ -1,0 +1,82 @@
+<UserControl x:Class="Wpf.Controls.ResourceEngagementStrip"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:converters="clr-namespace:Wpf.Converters"
+             mc:Ignorable="d"
+             d:DesignHeight="150" d:DesignWidth="800"
+             Background="{StaticResource BackgroundBrush}">
+
+    <UserControl.Resources>
+        <converters:SimpleDayStateToColorConverter x:Key="DayStateToColorConverter"/>
+    </UserControl.Resources>
+
+    <Grid>
+        <Grid.ColumnDefinitions>
+            <!-- Имена ресурсов (фиксированная ширина) -->
+            <ColumnDefinition Width="Auto"/>
+            <!-- Timeline (скроллируемая область) -->
+            <ColumnDefinition Width="*"/>
+        </Grid.ColumnDefinitions>
+
+        <!-- ═══════════════════════════════════════════════════════════════ -->
+        <!-- ИМЕНА РЕСУРСОВ (левая панель)                                   -->
+        <!-- ═══════════════════════════════════════════════════════════════ -->
+        <Border Grid.Column="0"
+                Visibility="{Binding ShowResourceNames, RelativeSource={RelativeSource AncestorType=UserControl}, Converter={StaticResource BoolToVisibilityConverter}}"
+                BorderBrush="{StaticResource GridLineBrush}"
+                BorderThickness="0,0,1,0"
+                Background="{StaticResource BackgroundBrush}">
+            <ScrollViewer x:Name="NamesScrollViewer"
+                          VerticalScrollBarVisibility="Hidden"
+                          HorizontalScrollBarVisibility="Disabled">
+                <ItemsControl x:Name="ResourceNamesPanel" ItemsSource="{Binding Resources}">
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate>
+                            <Border Height="24" 
+                                    BorderBrush="{StaticResource GridLineBrush}"
+                                    BorderThickness="0,0,0,1"
+                                    Padding="8,0">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="Auto"/>
+                                        <ColumnDefinition Width="*"/>
+                                    </Grid.ColumnDefinitions>
+                                    
+                                    <!-- Цветовой индикатор -->
+                                    <Border Grid.Column="0" 
+                                            Width="12" Height="12" 
+                                            CornerRadius="2"
+                                            Margin="0,0,6,0"
+                                            Background="{Binding ColorHex, Converter={StaticResource HexToColorConverter}}"/>
+                                    
+                                    <!-- Имя -->
+                                    <TextBlock Grid.Column="1"
+                                               Text="{Binding Name}"
+                                               VerticalAlignment="Center"
+                                               TextTrimming="CharacterEllipsis"
+                                               FontSize="11"/>
+                                </Grid>
+                            </Border>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+            </ScrollViewer>
+        </Border>
+
+        <!-- ═══════════════════════════════════════════════════════════════ -->
+        <!-- TIMELINE CANVAS (правая панель)                                 -->
+        <!-- ═══════════════════════════════════════════════════════════════ -->
+        <ScrollViewer x:Name="TimelineScrollViewer"
+                      Grid.Column="1"
+                      HorizontalScrollBarVisibility="Hidden"
+                      VerticalScrollBarVisibility="Auto"
+                      ScrollChanged="TimelineScrollViewer_ScrollChanged"
+                      VerticalAlignment="Top">
+            <Canvas x:Name="EngagementCanvas"
+                    Background="White"
+                    ClipToBounds="True"/>
+        </ScrollViewer>
+    </Grid>
+</UserControl>

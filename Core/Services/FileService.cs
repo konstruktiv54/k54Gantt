@@ -3,21 +3,27 @@ using System.Windows;
 using Core.Models;
 using Core.Models.DTOs;
 using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
 using Task = Core.Interfaces.Task;
 
 namespace Core.Services;
 
 /// <summary>
 /// Сервис для сохранения и загрузки проектов Gantt Chart в формате JSON.
-/// Поддерживает сериализацию задач, сплитов, групп и ресурсов.
+/// Поддерживает сериализацию задач, сплитов, групп, ресурсов, интервалов участия и отсутствий.
 /// </summary>
 public class FileService
 {
     /// <summary>
+    /// Текущая версия формата файла.
+    /// </summary>
+    private const int CurrentFormatVersion = 2;
+
+    /// <summary>
     /// Ссылка на ResourceService для сохранения/загрузки ресурсов.
     /// Может быть null — в этом случае ресурсы не сохраняются/не загружаются.
     /// </summary>
-    public ResourceService ResourceService { get; set; }
+    public ResourceService? ResourceService { get; set; }
 
     /// <summary>
     /// Сохраняет проект в JSON файл.
@@ -28,6 +34,7 @@ public class FileService
         {
             var managerData = new ProjectManagerData
             {
+                FormatVersion = CurrentFormatVersion,
                 Now = manager.Now.ToString(),
                 Start = manager.Start,
                 Tasks = new List<TaskData>(),
@@ -46,23 +53,39 @@ public class FileService
                     End = task.End.ToString(),
                     Duration = task.Duration.ToString(),
                     Complete = task.Complete,
-                    IsCollapsed = task.IsCollapsed
+                    IsCollapsed = task.IsCollapsed,
+                    Deadline = task.Deadline?.ToString(),
+                    Note = task.Note
                 };
                 managerData.Tasks.Add(taskData);
             }
 
-            // Добавляем ресурсы и назначения
+            // Добавляем ресурсы, назначения, интервалы и отсутствия
             if (ResourceService != null)
             {
                 try
                 {
-                    var (resources, assignments) = ResourceService.GetAllData();
+                    var (resources, assignments, intervals, absences) = ResourceService.GetAllDataExtended();
+
+                    // Ресурсы (с новым форматом Role как int)
                     managerData.Resources = resources.Select(r => r.ToData()).ToList();
+
+                    // Назначения
                     managerData.ResourceAssignments = assignments.Select(a => a.ToData()).ToList();
+
+                    // Интервалы участия
+                    managerData.ParticipationIntervals = intervals
+                        .Select(ParticipationIntervalData.FromDomain)
+                        .ToList();
+
+                    // Отсутствия
+                    managerData.Absences = absences
+                        .Select(AbsenceData.FromDomain)
+                        .ToList();
                 }
                 catch (Exception ex)
                 {
-                    System.Diagnostics.Debug.WriteLine("ResourceService.GetAllData failed: " + ex.Message);
+                    System.Diagnostics.Debug.WriteLine("ResourceService.GetAllDataExtended failed: " + ex.Message);
                 }
             }
 
@@ -94,9 +117,20 @@ public class FileService
         try
         {
             var jsonString = File.ReadAllText(filePath);
+
+            // Сначала парсим как JObject для определения версии
+            var jsonObject = JObject.Parse(jsonString);
+            var formatVersion = jsonObject["FormatVersion"]?.Value<int>() ?? 1;
+
             var managerData = JsonConvert.DeserializeObject<ProjectManagerData>(jsonString);
 
-            // Проверка старого формата
+            // Миграция при необходимости
+            if (formatVersion < CurrentFormatVersion)
+            {
+                MigrateData(managerData, jsonObject, formatVersion);
+            }
+
+            // Проверка старого формата без ID
             if (managerData.Tasks.All(t => t.Id == Guid.Empty))
             {
                 MessageBox.Show(
@@ -136,7 +170,8 @@ public class FileService
                 {
                     Id = taskData.Id,
                     Name = taskData.Name,
-                    IsCollapsed = taskData.IsCollapsed
+                    IsCollapsed = taskData.IsCollapsed,
+                    Note = taskData.Note
                 };
 
                 manager.Add(task);
@@ -146,13 +181,16 @@ public class FileService
                 if (TimeSpan.TryParse(taskData.Duration, out var duration))
                     manager.SetDuration(task, duration);
                 manager.SetComplete(task, taskData.Complete);
+                
+                if (!string.IsNullOrEmpty(taskData.Deadline) && TimeSpan.TryParse(taskData.Deadline, out var deadline))
+                    task.Deadline = deadline;
 
                 if (!tasksById.ContainsKey(task.Id))
                     tasksById[task.Id] = task;
             }
 
             // Восстанавливаем сплиты
-            if (managerData.SplitTasks != null && managerData.SplitTasks.Count > 0)
+            if (managerData.SplitTasks.Count > 0)
             {
                 var splitTaskInfos = new Dictionary<Guid, List<SplitTaskRelation>>();
 
@@ -231,17 +269,48 @@ public class FileService
             {
                 try
                 {
+                    // Загружаем ресурсы (с учётом миграции роли)
                     var resources = managerData.Resources
                         .Select(r => Resource.FromData(r))
-                        .ToList();
+                        .Where(r => r != null)
+                        .ToList()!;
+
                     ResourceService.LoadResources(resources);
 
+                    // Загружаем назначения
                     if (managerData.ResourceAssignments != null)
                     {
                         var assignments = managerData.ResourceAssignments
                             .Select(a => ResourceAssignment.FromData(a))
-                            .ToList();
+                            .Where(a => a != null)
+                            .ToList()!;
+
                         ResourceService.LoadAssignments(assignments);
+                    }
+
+                    // Загружаем интервалы участия
+                    if (managerData.ParticipationIntervals != null && managerData.ParticipationIntervals.Count > 0)
+                    {
+                        var intervals = managerData.ParticipationIntervals
+                            .Select(i => i.ToDomain())
+                            .ToList();
+
+                        ResourceService.LoadParticipationIntervals(intervals);
+                    }
+                    else
+                    {
+                        // Миграция: создаём дефолтные интервалы
+                        ResourceService.EnsureDefaultParticipationIntervals();
+                    }
+
+                    // Загружаем отсутствия
+                    if (managerData.Absences != null && managerData.Absences.Count > 0)
+                    {
+                        var absences = managerData.Absences
+                            .Select(a => a.ToDomain())
+                            .ToList();
+
+                        ResourceService.LoadAbsences(absences);
                     }
                 }
                 catch (Exception ex)
@@ -257,6 +326,59 @@ public class FileService
             MessageBox.Show($"Ошибка загрузки файла: {ex.Message}",
                 "Gantt Chart", MessageBoxButton.OK, MessageBoxImage.Error);
             throw;
+        }
+    }
+
+    /// <summary>
+    /// Мигрирует данные из старого формата в новый.
+    /// </summary>
+    /// <param name="data">Десериализованные данные.</param>
+    /// <param name="jsonObject">Исходный JSON для чтения legacy полей.</param>
+    /// <param name="fromVersion">Версия исходного формата.</param>
+    private void MigrateData(ProjectManagerData data, JObject jsonObject, int fromVersion)
+    {
+        if (fromVersion < 2)
+        {
+            // Миграция с версии 1: Role был string, MaxWorkload был в Resource
+            var resourcesArray = jsonObject["Resources"] as JArray;
+            if (resourcesArray != null)
+            {
+                for (int i = 0; i < resourcesArray.Count && i < data.Resources.Count; i++)
+                {
+                    var resourceJson = resourcesArray[i] as JObject;
+                    if (resourceJson != null)
+                    {
+                        // Читаем старый string Role
+                        var roleString = resourceJson["Role"]?.Value<string>();
+                        if (!string.IsNullOrEmpty(roleString) && !int.TryParse(roleString, out _))
+                        {
+                            // Это строковая роль — конвертируем
+                            data.Resources[i].Role = (int)ResourceRoleExtensions.ParseFromString(roleString);
+                        }
+
+                        // MaxWorkload из Resource уже не используется,
+                        // но можем создать ParticipationInterval с этим значением
+                        var maxWorkload = resourceJson["MaxWorkload"]?.Value<int>() ?? 100;
+
+                        // Создаём интервал участия если его нет
+                        var resourceId = data.Resources[i].Id;
+                        if (!data.ParticipationIntervals.Any(p => p.ResourceId == resourceId))
+                        {
+                            data.ParticipationIntervals.Add(new ParticipationIntervalData
+                            {
+                                Id = Guid.NewGuid(),
+                                ResourceId = resourceId,
+                                StartDays = 0,
+                                EndDays = null,
+                                MaxWorkload = maxWorkload,
+                                CreatedAt = DateTime.Now
+                            });
+                        }
+                    }
+                }
+            }
+
+            System.Diagnostics.Debug.WriteLine($"Migrated data from version {fromVersion} to {CurrentFormatVersion}");
         }
     }
 }
