@@ -616,7 +616,7 @@ public class TaskRenderer
 
         // Позиция после имени задачи
         var nameWidth = EstimateTextWidth(task.Name ?? "Без названия", 11);
-        var noteX = x + width + 8 + nameWidth + 50;
+        var noteX = x + width + 8 + nameWidth + 15;
         var noteY = y + (barHeight - 16) / 2;
 
         // Контейнер для заметки (кликабельная область)
@@ -654,9 +654,9 @@ public class TaskRenderer
             .Replace("\r", " ")
             .Trim();
 
-        if (noteText.Length > 30)
+        if (noteText.Length > 150)
         {
-            noteText = noteText.Substring(0, 27) + "...";
+            noteText = noteText.Substring(0, 147) + "...";
         }
 
         var noteTextBlock = new TextBlock
@@ -665,7 +665,7 @@ public class TaskRenderer
             FontSize = 10,
             FontStyle = FontStyles.Italic,
             Foreground = new SolidColorBrush(Color.FromRgb(100, 80, 40)),
-            MaxWidth = 150,
+            MaxWidth = 500,
             TextTrimming = TextTrimming.CharacterEllipsis,
             VerticalAlignment = VerticalAlignment.Center
         };

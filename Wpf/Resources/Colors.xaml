@@ -11,7 +11,7 @@
     <Color x:Key="SidebarBackgroundColor">#F5F5F5</Color>
     <Color x:Key="HeaderBackgroundColor">#E8E8E8</Color>
     <Color x:Key="GridLineColor">#E0E0E0</Color>
-    <Color x:Key="WeekendBackgroundColor">#F9F9F9</Color>
+    <Color x:Key="WeekendBackgroundColor">#fdf8df</Color>
 
     <!-- Акцентные цвета -->
     <Color x:Key="PrimaryColor">#0078D4</Color>

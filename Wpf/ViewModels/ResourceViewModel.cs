@@ -149,12 +149,20 @@ public partial class ResourceViewModel : ObservableObject
             return;
         }
 
+        var initials = string.IsNullOrWhiteSpace(EditInitials) 
+            ? GenerateInitials(EditName) 
+            : EditInitials.Trim().ToUpper();
+    
+        if (initials.Length > 12)
+        {
+            StatusMessage = "Инициалы не могут превышать 12 символов";
+            return;
+        }
+        
         var resource = new Resource
         {
             Name = EditName.Trim(),
-            Initials = string.IsNullOrWhiteSpace(EditInitials) 
-                ? GenerateInitials(EditName) 
-                : EditInitials.Trim().ToUpper(),
+            Initials = initials,
             Role = ResourceRole.Constructor,
             ColorHex = EditColorHex
         };

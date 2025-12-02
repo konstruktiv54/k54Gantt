@@ -18,6 +18,8 @@ public class Task
         End =  TimeSpan.FromDays(1);
         Duration = TimeSpan.FromDays(1);
         Slack = TimeSpan.Zero;
+        
+        
     }
         
     /// <summary>

@@ -100,6 +100,12 @@ public class EngagementCalculationService
     /// <returns>Состояние дня.</returns>
     public DayState CalculateDayState(Guid resourceId, TimeSpan day)
     {
+        // ═══ ПРОВЕРКА ВЫХОДНЫХ (наивысший приоритет) ═══
+        if (IsWeekend(day))
+        {
+            return DayState.Weekend;
+        }
+        
         // 1. Проверяем участие в проекте
         var interval = _resourceService.GetParticipationIntervalForDay(resourceId, day);
         bool inParticipation = interval != null;
@@ -153,6 +159,12 @@ public class EngagementCalculationService
     /// <returns>Статус дня со всей информацией.</returns>
     public DayStatus GetDayStatus(Guid resourceId, TimeSpan day)
     {
+        // ═══ ПРОВЕРКА ВЫХОДНЫХ (наивысший приоритет) ═══
+        if (_projectManager != null && IsWeekend(day))
+        {
+            return DayStatus.Weekend(day, resourceId);
+        }
+        
         var resource = _resourceService.GetResourceById(resourceId);
         if (resource == null)
             return DayStatus.NotParticipating(day, resourceId);
@@ -359,6 +371,21 @@ public class EngagementCalculationService
     }
 
     #region Private Methods
+    
+    /// <summary>
+    /// Проверяет, является ли день выходным (суббота или воскресенье).
+    /// </summary>
+    /// <param name="day">День (смещение от начала проекта).</param>
+    /// <returns>True, если суббота или воскресенье.</returns>
+    private bool IsWeekend(TimeSpan day)
+    {
+        if (_projectManager == null)
+            return false;
+
+        var actualDate = _projectManager.Start.AddDays(day.Days);
+        return actualDate.DayOfWeek == DayOfWeek.Saturday 
+               || actualDate.DayOfWeek == DayOfWeek.Sunday;
+    }
 
     private int CalculateAllocationPercentInternal(ResourceRole role, IReadOnlyList<ResourceAssignment> assignments)
     {

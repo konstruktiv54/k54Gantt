@@ -41,7 +41,14 @@ public enum DayState
     /// или есть назначения в период отсутствия/неучастия.
     /// Визуализация: цвет ресурса + красный контур.
     /// </summary>
-    Overbooked = 5
+    Overbooked = 5,
+
+    /// <summary>
+    /// Выходной день (суббота или воскресенье).
+    /// Назначения игнорируются, загрузка = 0.
+    /// Визуализация: светло-коричневая диагональная штриховка.
+    /// </summary>
+    Weekend = 6
 }
 
 /// <summary>
@@ -64,6 +71,7 @@ public static class DayStateExtensions
             DayState.PartialAssigned => "Частично занят",
             DayState.Assigned => "Занят",
             DayState.Overbooked => "Перегружен",
+            DayState.Weekend => "Выходной день",
             _ => "Неизвестно"
         };
     }
@@ -73,18 +81,19 @@ public static class DayStateExtensions
     /// Меньшее значение = выше приоритет.
     /// </summary>
     /// <param name="state">Статус дня.</param>
-    /// <returns>Приоритет (1-6).</returns>
+    /// <returns>Приоритет (1-7).</returns>
     public static int GetPriority(this DayState state)
     {
         return state switch
         {
-            DayState.Overbooked => 1,       // Высший приоритет
-            DayState.Assigned => 2,
-            DayState.PartialAssigned => 3,
-            DayState.Absence => 4,
-            DayState.NotParticipating => 5,
-            DayState.Free => 6,             // Низший приоритет
-            _ => 6
+            DayState.Weekend => 1,          // Наивысший приоритет — выходные перекрывают всё
+            DayState.Overbooked => 2,
+            DayState.Assigned => 3,
+            DayState.PartialAssigned => 4,
+            DayState.Absence => 5,
+            DayState.NotParticipating => 6,
+            DayState.Free => 7,             // Низший приоритет
+            _ => 7
         };
     }
 
@@ -106,5 +115,17 @@ public static class DayStateExtensions
     public static bool IsAvailable(this DayState state)
     {
         return state == DayState.Free || state == DayState.PartialAssigned;
+    }
+
+    /// <summary>
+    /// Проверяет, является ли день нерабочим (выходной или отсутствие).
+    /// </summary>
+    /// <param name="state">Статус дня.</param>
+    /// <returns>True для Weekend, Absence, NotParticipating.</returns>
+    public static bool IsNonWorking(this DayState state)
+    {
+        return state == DayState.Weekend 
+            || state == DayState.Absence 
+            || state == DayState.NotParticipating;
     }
 }

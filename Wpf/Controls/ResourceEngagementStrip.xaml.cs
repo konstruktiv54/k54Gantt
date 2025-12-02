@@ -356,8 +356,9 @@ public partial class ResourceEngagementStrip : UserControl
                 allocationPercent = status.AllocationPercent;
                 maxWorkload = status.MaxWorkload;
             
-                // ИЗМЕНЕНИЕ: Используем новый метод вместо status.TooltipText
-                tooltipText = BuildTooltipText(resource, status);
+                tooltipText = state == DayState.Weekend 
+                    ? BuildWeekendTooltip(day) 
+                    : BuildTooltipText(resource, status);
             }
             else
             {
@@ -384,6 +385,23 @@ public partial class ResourceEngagementStrip : UserControl
             StrokeThickness = 1
         };
         EngagementCanvas.Children.Add(line);
+    }
+    
+    /// <summary>
+    /// Формирует tooltip для выходного дня.
+    /// </summary>
+    /// <param name="day">День (смещение от начала проекта).</param>
+    /// <returns>Текст tooltip.</returns>
+    private string BuildWeekendTooltip(TimeSpan day)
+    {
+        if (ProjectManager != null)
+        {
+            var actualDate = ProjectManager.Start.AddDays(day.Days);
+            var dayName = actualDate.DayOfWeek == DayOfWeek.Saturday ? "Суббота" : "Воскресенье";
+            return $"{dayName}, {actualDate:dd.MM.yyyy}\nВыходной день";
+        }
+    
+        return "Выходной день";
     }
 
 
@@ -467,6 +485,7 @@ public partial class ResourceEngagementStrip : UserControl
             ToolTip = string.IsNullOrEmpty(tooltip) ? null : tooltip
         };
 
+        // Штриховка ТОЛЬКО для отсутствия
         if (state == DayState.Absence)
         {
             cell.Fill = CreateHatchBrush();
@@ -474,6 +493,7 @@ public partial class ResourceEngagementStrip : UserControl
 
         return cell;
     }
+    
 
     private static Brush GetCellBrush(DayState state, string colorHex, int allocation, int maxWorkload)
     {
@@ -482,6 +502,7 @@ public partial class ResourceEngagementStrip : UserControl
             DayState.Free => new SolidColorBrush(Color.FromRgb(250, 250, 250)),
             DayState.Absence => new SolidColorBrush(Color.FromRgb(189, 189, 189)),
             DayState.NotParticipating => new SolidColorBrush(Color.FromRgb(238, 238, 238)),
+            DayState.Weekend => new SolidColorBrush(Color.FromRgb(253, 248, 223)), // #EDE0D0 — как в GridRenderer
             DayState.PartialAssigned => CreatePartialBrush(colorHex, allocation, maxWorkload),
             DayState.Assigned => CreateColorBrush(colorHex, 1.0),
             DayState.Overbooked => CreateColorBrush(colorHex, 1.0),

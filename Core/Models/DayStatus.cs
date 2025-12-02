@@ -166,6 +166,24 @@ public class DayStatus
             allocationPercent: 0,
             state: DayState.NotParticipating);
     }
+    
+    /// <summary>
+    /// Создаёт статус для выходного дня.
+    /// Назначения игнорируются, загрузка = 0.
+    /// </summary>
+    public static DayStatus Weekend(TimeSpan day, Guid resourceId)
+    {
+        return new DayStatus(
+            day: day,
+            resourceId: resourceId,
+            inParticipation: false,  // В выходные не работаем
+            maxWorkload: 0,
+            inAbsence: false,
+            absenceReason: null,
+            assignments: Array.Empty<ResourceAssignment>(),
+            allocationPercent: 0,
+            state: DayState.Weekend);
+    }
 
     /// <summary>
     /// Создаёт статус для свободного дня.

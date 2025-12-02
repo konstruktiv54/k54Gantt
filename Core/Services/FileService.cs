@@ -53,7 +53,9 @@ public class FileService
                     End = task.End.ToString(),
                     Duration = task.Duration.ToString(),
                     Complete = task.Complete,
-                    IsCollapsed = task.IsCollapsed
+                    IsCollapsed = task.IsCollapsed,
+                    Deadline = task.Deadline?.ToString(),
+                    Note = task.Note
                 };
                 managerData.Tasks.Add(taskData);
             }
@@ -168,7 +170,8 @@ public class FileService
                 {
                     Id = taskData.Id,
                     Name = taskData.Name,
-                    IsCollapsed = taskData.IsCollapsed
+                    IsCollapsed = taskData.IsCollapsed,
+                    Note = taskData.Note
                 };
 
                 manager.Add(task);
@@ -178,13 +181,16 @@ public class FileService
                 if (TimeSpan.TryParse(taskData.Duration, out var duration))
                     manager.SetDuration(task, duration);
                 manager.SetComplete(task, taskData.Complete);
+                
+                if (!string.IsNullOrEmpty(taskData.Deadline) && TimeSpan.TryParse(taskData.Deadline, out var deadline))
+                    task.Deadline = deadline;
 
                 if (!tasksById.ContainsKey(task.Id))
                     tasksById[task.Id] = task;
             }
 
             // Восстанавливаем сплиты
-            if (managerData.SplitTasks != null && managerData.SplitTasks.Count > 0)
+            if (managerData.SplitTasks.Count > 0)
             {
                 var splitTaskInfos = new Dictionary<Guid, List<SplitTaskRelation>>();
 

@@ -10,4 +10,7 @@ public class TaskData
     public string Duration { get; set; }
     public float Complete { get; set; }
     public bool IsCollapsed { get; set; }
+    
+    public string? Deadline { get; set; }
+    public string? Note { get; set; }
 }
