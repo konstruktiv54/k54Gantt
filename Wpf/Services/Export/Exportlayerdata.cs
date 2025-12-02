@@ -86,6 +86,11 @@ public class EngagementStripExportData
     public required ExportLayerData Engagement { get; init; }
     
     /// <summary>
+    /// Canvas с именами ресурсов (колонка слева).
+    /// </summary>
+    public ExportLayerData? ResourceNames { get; init; }
+    
+    /// <summary>
     /// Ширина одной колонки (день) в пикселях.
     /// Должна совпадать с GanttChart.ColumnWidth.
     /// </summary>
@@ -100,6 +105,11 @@ public class EngagementStripExportData
     /// Количество ресурсов.
     /// </summary>
     public int ResourceCount { get; init; }
+    
+    /// <summary>
+    /// Ширина колонки с именами ресурсов.
+    /// </summary>
+    public double ResourceNamesWidth => ResourceNames?.Width ?? 0;
 }
 
 /// <summary>
@@ -107,6 +117,8 @@ public class EngagementStripExportData
 /// </summary>
 public class DocumentExportData
 {
+    public double TimelineOffsetX => EngagementStrip?.ResourceNamesWidth ?? 0;
+    
     /// <summary>
     /// Данные диаграммы Ганта.
     /// </summary>
@@ -125,8 +137,16 @@ public class DocumentExportData
     
     /// <summary>
     /// Общая ширина документа.
+    /// Включает колонку имён ресурсов, если она есть.
     /// </summary>
-    public double TotalWidth => GanttChart.TotalWidth;
+    public double TotalWidth
+    {
+        get
+        {
+            var namesWidth = EngagementStrip?.ResourceNamesWidth ?? 0;
+            return Math.Max(GanttChart.TotalWidth, namesWidth + (EngagementStrip?.Engagement.Width ?? 0));
+        }
+    }
     
     /// <summary>
     /// Общая высота документа.

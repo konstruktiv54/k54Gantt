@@ -557,8 +557,13 @@ public partial class ResourceEngagementStrip : UserControl
     }
 
     #endregion
-    
+
     #region Export Data Provider
+
+    /// <summary>
+    /// Ширина колонки с именами ресурсов при экспорте.
+    /// </summary>
+    private const double ExportResourceNamesWidth = 120;
 
     /// <summary>
     /// Возвращает данные полосы загрузки для экспорта.
@@ -578,14 +583,29 @@ public partial class ResourceEngagementStrip : UserControl
             Refresh();
         }
 
+        // Вычисляем единую высоту для обоих канвасов
+        var engagementHeight = EngagementCanvas.Height > 0
+            ? EngagementCanvas.Height
+            : EngagementCanvas.ActualHeight;
+
+        // Создаём Canvas с именами ресурсов (используем ту же высоту, что и EngagementCanvas)
+        var namesCanvas = CreateResourceNamesCanvas(resources, engagementHeight);
+
         return new EngagementStripExportData
         {
             Engagement = new ExportLayerData
             {
                 Canvas = EngagementCanvas,
                 Width = EngagementCanvas.Width > 0 ? EngagementCanvas.Width : EngagementCanvas.ActualWidth,
-                Height = EngagementCanvas.Height > 0 ? EngagementCanvas.Height : EngagementCanvas.ActualHeight,
+                Height = engagementHeight,
                 Name = "Engagement"
+            },
+            ResourceNames = new ExportLayerData
+            {
+                Canvas = namesCanvas,
+                Width = ExportResourceNamesWidth,
+                Height = engagementHeight, // Та же высота
+                Name = "ResourceNames"
             },
             ColumnWidth = ColumnWidth,
             RowHeight = RowHeight,
@@ -601,11 +621,125 @@ public partial class ResourceEngagementStrip : UserControl
     {
         // Принудительно перерисовываем
         Refresh();
-    
+
         // Ждём завершения рендеринга
         Dispatcher.Invoke(() => { }, System.Windows.Threading.DispatcherPriority.Render);
-    
+
         return GetExportData();
+    }
+
+    /// <summary>
+    /// Создаёт Canvas с именами ресурсов для экспорта.
+    /// </summary>
+    /// <param name="resources">Список ресурсов.</param>
+    /// <param name="totalHeight">Общая высота (должна совпадать с EngagementCanvas).</param>
+    private Canvas CreateResourceNamesCanvas(List<Resource> resources, double totalHeight)
+    {
+        // Вычисляем высоту строки из общей высоты
+        var rowHeight = resources.Count > 0 ? totalHeight / resources.Count : RowHeight;
+
+        var canvas = new Canvas
+        {
+            Width = ExportResourceNamesWidth,
+            Height = totalHeight,
+            Background = Brushes.White
+        };
+
+        for (int i = 0; i < resources.Count; i++)
+        {
+            var resource = resources[i];
+            var y = i * rowHeight;
+
+            // Фон строки (высота как в EngagementCanvas)
+            var rowBackground = new Rectangle
+            {
+                Width = ExportResourceNamesWidth,
+                Height = rowHeight - 1, // -1 для линии разделителя, как в EngagementStrip
+                Fill = Brushes.White
+            };
+            Canvas.SetLeft(rowBackground, 0);
+            Canvas.SetTop(rowBackground, y);
+            canvas.Children.Add(rowBackground);
+
+            // Горизонтальная линия-разделитель (как в EngagementStrip)
+            var separatorLine = new Line
+            {
+                X1 = 0,
+                Y1 = y + rowHeight,
+                X2 = ExportResourceNamesWidth,
+                Y2 = y + rowHeight,
+                Stroke = new SolidColorBrush(Color.FromRgb(224, 224, 224)),
+                StrokeThickness = 1
+            };
+            canvas.Children.Add(separatorLine);
+
+            // Цветовой индикатор
+            var colorIndicator = new Rectangle
+            {
+                Width = 10,
+                Height = 10,
+                RadiusX = 2,
+                RadiusY = 2,
+                Fill = CreateColorBrushFromHex(resource.ColorHex)
+            };
+            Canvas.SetLeft(colorIndicator, 6);
+            Canvas.SetTop(colorIndicator, y + (rowHeight - 10) / 2);
+            canvas.Children.Add(colorIndicator);
+
+            // Имя ресурса
+            var nameText = new TextBlock
+            {
+                Text = resource.Name,
+                FontSize = 10,
+                FontWeight = FontWeights.Normal,
+                Foreground = Brushes.Black,
+                TextTrimming = TextTrimming.CharacterEllipsis,
+                MaxWidth = ExportResourceNamesWidth - 24
+            };
+            Canvas.SetLeft(nameText, 22);
+            Canvas.SetTop(nameText, y + (rowHeight - 14) / 2);
+            canvas.Children.Add(nameText);
+        }
+
+        // Правая граница колонки
+        var borderLine = new Line
+        {
+            X1 = ExportResourceNamesWidth - 1,
+            Y1 = 0,
+            X2 = ExportResourceNamesWidth - 1,
+            Y2 = totalHeight,
+            Stroke = new SolidColorBrush(Color.FromRgb(200, 200, 200)),
+            StrokeThickness = 1
+        };
+        canvas.Children.Add(borderLine);
+
+        return canvas;
+    }
+
+    /// <summary>
+    /// Создаёт кисть из HEX-цвета.
+    /// </summary>
+    private static SolidColorBrush CreateColorBrushFromHex(string hex)
+    {
+        try
+        {
+            if (string.IsNullOrEmpty(hex))
+                return new SolidColorBrush(Color.FromRgb(70, 130, 180));
+
+            if (hex.StartsWith("#"))
+                hex = hex.Substring(1);
+
+            var color = Color.FromRgb(
+                Convert.ToByte(hex.Substring(0, 2), 16),
+                Convert.ToByte(hex.Substring(2, 2), 16),
+                Convert.ToByte(hex.Substring(4, 2), 16));
+
+            return new SolidColorBrush(color);
+        }
+        catch
+        {
+            return new SolidColorBrush(Color.FromRgb(70, 130, 180));
+        }
     }
 
     #endregion

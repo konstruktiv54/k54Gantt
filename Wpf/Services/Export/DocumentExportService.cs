@@ -32,6 +32,9 @@ public static class DocumentExportService
             File.Delete(filePath);
         }
 
+        // Смещение timeline (ширина колонки имён, если есть)
+        double timelineOffsetX = data.TimelineOffsetX;
+
         // Создаём FixedPage с полными размерами документа
         var fixedPage = new FixedPage
         {
@@ -50,7 +53,7 @@ public static class DocumentExportService
             data.GanttChart.Header.Width,
             data.GanttChart.Header.Height);
         
-        FixedPage.SetLeft(headerClone, 0);
+        FixedPage.SetLeft(headerClone, timelineOffsetX);
         FixedPage.SetTop(headerClone, currentY);
         fixedPage.Children.Add(headerClone);
         
@@ -64,7 +67,7 @@ public static class DocumentExportService
             data.GanttChart.Grid.Width,
             data.GanttChart.Grid.Height);
         
-        FixedPage.SetLeft(gridClone, 0);
+        FixedPage.SetLeft(gridClone, timelineOffsetX);
         FixedPage.SetTop(gridClone, currentY);
         fixedPage.Children.Add(gridClone);
 
@@ -76,7 +79,7 @@ public static class DocumentExportService
             data.GanttChart.Tasks.Width,
             data.GanttChart.Tasks.Height);
         
-        FixedPage.SetLeft(taskClone, 0);
+        FixedPage.SetLeft(taskClone, timelineOffsetX);
         FixedPage.SetTop(taskClone, currentY);
         fixedPage.Children.Add(taskClone);
 
@@ -88,7 +91,7 @@ public static class DocumentExportService
             data.GanttChart.TodayLine.Width,
             data.GanttChart.TodayLine.Height);
         
-        FixedPage.SetLeft(todayClone, 0);
+        FixedPage.SetLeft(todayClone, timelineOffsetX);
         FixedPage.SetTop(todayClone, currentY);
         fixedPage.Children.Add(todayClone);
 
@@ -109,13 +112,26 @@ public static class DocumentExportService
             
             currentY += data.SectionGap / 2;
 
-            // Canvas загрузки ресурсов
+            // Колонка с именами ресурсов (если есть)
+            if (data.EngagementStrip.ResourceNames != null)
+            {
+                var namesClone = CloneCanvasAsVisual(
+                    data.EngagementStrip.ResourceNames.Canvas,
+                    data.EngagementStrip.ResourceNames.Width,
+                    data.EngagementStrip.ResourceNames.Height);
+                
+                FixedPage.SetLeft(namesClone, 0);
+                FixedPage.SetTop(namesClone, currentY);
+                fixedPage.Children.Add(namesClone);
+            }
+
+            // Canvas загрузки ресурсов - начинается с того же смещения, что и GanttChart
             var engagementClone = CloneCanvasAsVisual(
                 data.EngagementStrip.Engagement.Canvas,
                 data.EngagementStrip.Engagement.Width,
                 data.EngagementStrip.Engagement.Height);
             
-            FixedPage.SetLeft(engagementClone, 0);
+            FixedPage.SetLeft(engagementClone, timelineOffsetX);
             FixedPage.SetTop(engagementClone, currentY);
             fixedPage.Children.Add(engagementClone);
         }
@@ -145,6 +161,18 @@ public static class DocumentExportService
             Background = Brushes.Transparent
         };
 
+        // Для динамически созданных Canvas нужно вызвать Measure/Arrange
+        // чтобы ActualWidth/ActualHeight были корректны
+        if (source.ActualWidth <= 0 || source.ActualHeight <= 0)
+        {
+            source.Measure(new Size(width, height));
+            source.Arrange(new Rect(0, 0, width, height));
+        }
+
+        // Используем реальные размеры или заданные, если Actual* всё ещё 0
+        var sourceWidth = source.ActualWidth > 0 ? source.ActualWidth : width;
+        var sourceHeight = source.ActualHeight > 0 ? source.ActualHeight : height;
+
         // Используем VisualBrush для захвата содержимого
         var visualBrush = new VisualBrush(source)
         {
@@ -152,7 +180,7 @@ public static class DocumentExportService
             AlignmentX = AlignmentX.Left,
             AlignmentY = AlignmentY.Top,
             ViewboxUnits = BrushMappingMode.Absolute,
-            Viewbox = new Rect(0, 0, source.ActualWidth, source.ActualHeight)
+            Viewbox = new Rect(0, 0, sourceWidth, sourceHeight)
         };
 
         var rect = new Rectangle
