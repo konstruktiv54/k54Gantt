@@ -184,9 +184,9 @@ public partial class TaskItemViewModel : ObservableObject
                 if (newDeadline < TimeSpan.Zero)
                     newDeadline = TimeSpan.Zero;
                 
-                // Deadline не может быть раньше End
-                if (newDeadline < Task.End)
-                    newDeadline = Task.End;
+                // // Deadline не может быть раньше End
+                // if (newDeadline < Task.End)
+                //     newDeadline = Task.End;
 
                 if (Task.Deadline == newDeadline) return;
                 _manager.SetDeadline(Task, newDeadline);

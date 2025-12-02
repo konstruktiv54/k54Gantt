@@ -616,7 +616,7 @@ public class TaskRenderer
 
         // Позиция после имени задачи
         var nameWidth = EstimateTextWidth(task.Name ?? "Без названия", 11);
-        var noteX = x + width + 8 + nameWidth + 15;
+        var noteX = x + width + 8 + nameWidth + 50;
         var noteY = y + (barHeight - 16) / 2;
 
         // Контейнер для заметки (кликабельная область)

@@ -1465,10 +1465,10 @@ public class ProjectManager<T, TR> : IProjectManager<T, TR>
             var roundedDeadline = TimeSpan.FromDays(wholeDays);
 
             // Deadline не может быть раньше End
-            if (roundedDeadline < task.End)
-            {
-                roundedDeadline = task.End;
-            }
+            // if (roundedDeadline < task.End)
+            // {
+            //     roundedDeadline = task.End;
+            // }
 
             task.Deadline = roundedDeadline;
         }
