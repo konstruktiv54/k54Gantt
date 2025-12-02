@@ -93,7 +93,7 @@ public class ResourceService
         AddResource(resource);
         return resource;
     }
-
+ 
     /// <summary>
     /// Обновляет существующий ресурс.
     /// </summary>
