@@ -131,29 +131,6 @@ public class ResourceService
     {
         return _resources;
     }
-
-    /// <summary>
-    /// Получает назначение ресурса на задачу.
-    /// </summary>
-    public ResourceAssignment? GetAssignment(Guid taskId, Guid resourceId)
-    {
-        return _assignments.FirstOrDefault(a => a.Matches(taskId, resourceId));
-    }
-
-    /// <summary>
-    /// Создаёт и добавляет новый ресурс с указанным именем.
-    /// </summary>
-    public Resource CreateResource(string name, ResourceRole role = ResourceRole.Constructor)
-    {
-        var resource = new Resource
-        {
-            Name = name,
-            Role = role
-        };
-        resource.GenerateInitialsFromName();
-        AddResource(resource);
-        return resource;
-    }
  
     /// <summary>
     /// Обновляет существующий ресурс.
@@ -228,25 +205,7 @@ public class ResourceService
         OnResourcesChanged();
         return true;
     }
-
-    /// <summary>
-    /// Удаляет ресурс.
-    /// </summary>
-    public bool RemoveResource(Resource resource)
-    {
-        if (resource == null) return false;
-        return RemoveResource(resource.Id);
-    }
-
-    /// <summary>
-    /// Получает ресурс по имени (первое совпадение).
-    /// </summary>
-    public Resource? GetResourceByName(string name)
-    {
-        return _resources.FirstOrDefault(r =>
-            string.Equals(r.Name, name, StringComparison.OrdinalIgnoreCase));
-    }
-
+    
     /// <summary>
     /// Очищает все ресурсы, назначения, интервалы и отсутствия.
     /// </summary>
@@ -294,16 +253,6 @@ public class ResourceService
     }
 
     /// <summary>
-    /// Назначает ресурс на задачу (перегрузка с объектами).
-    /// </summary>
-    public ResourceAssignment AssignResource(Task task, Resource resource, int workload = 100)
-    {
-        if (task == null) throw new ArgumentNullException(nameof(task));
-        if (resource == null) throw new ArgumentNullException(nameof(resource));
-        return AssignResource(task.Id, resource.Id, workload);
-    }
-
-    /// <summary>
     /// Снимает назначение ресурса с задачи.
     /// </summary>
     public bool UnassignResource(Guid taskId, Guid resourceId)
@@ -315,15 +264,6 @@ public class ResourceService
         _assignments.Remove(assignment);
         OnAssignmentsChanged();
         return true;
-    }
-
-    /// <summary>
-    /// Снимает назначение ресурса с задачи (перегрузка с объектами).
-    /// </summary>
-    public bool UnassignResource(Task task, Resource resource)
-    {
-        if (task == null || resource == null) return false;
-        return UnassignResource(task.Id, resource.Id);
     }
 
     /// <summary>
@@ -406,50 +346,6 @@ public class ResourceService
     }
 
     /// <summary>
-    /// Обновляет интервал участия.
-    /// </summary>
-    public void UpdateParticipationInterval(ParticipationInterval interval)
-    {
-        if (interval == null)
-            throw new ArgumentNullException(nameof(interval));
-
-        var index = _participationIntervals.FindIndex(i => i.Id == interval.Id);
-        if (index < 0)
-            throw new InvalidOperationException($"Интервал с ID {interval.Id} не найден.");
-
-        var errors = interval.Validate();
-        if (errors.Count > 0)
-            throw new InvalidOperationException($"Невалидный интервал: {string.Join(", ", errors)}");
-
-        // Проверяем, что ресурс существует
-        var resource = GetResource(interval.ResourceId);
-        if (resource == null)
-            throw new InvalidOperationException($"Ресурс с ID {interval.ResourceId} не найден.");
-
-        // Для Constructor MaxWorkload всегда = 100
-        if (resource.Role == ResourceRole.Constructor)
-        {
-            interval.MaxWorkload = 100;
-        }
-
-        // Проверяем пересечение (исключая самого себя)
-        var existingIntervals = _participationIntervals
-            .Where(i => i.ResourceId == interval.ResourceId && i.Id != interval.Id);
-
-        foreach (var existing in existingIntervals)
-        {
-            if (interval.OverlapsWith(existing))
-            {
-                throw new InvalidOperationException(
-                    $"Интервал пересекается с существующим: {existing}");
-            }
-        }
-
-        _participationIntervals[index] = interval;
-        OnParticipationIntervalsChanged();
-    }
-
-    /// <summary>
     /// Удаляет интервал участия.
     /// </summary>
     public bool RemoveParticipationInterval(Guid intervalId)
@@ -511,26 +407,6 @@ public class ResourceService
             throw new InvalidOperationException($"Ресурс с ID {absence.ResourceId} не найден.");
 
         _absences.Add(absence);
-        OnAbsencesChanged();
-    }
-
-    /// <summary>
-    /// Обновляет отсутствие.
-    /// </summary>
-    public void UpdateAbsence(Absence absence)
-    {
-        if (absence == null)
-            throw new ArgumentNullException(nameof(absence));
-
-        var index = _absences.FindIndex(a => a.Id == absence.Id);
-        if (index < 0)
-            throw new InvalidOperationException($"Отсутствие с ID {absence.Id} не найдено.");
-
-        var errors = absence.Validate();
-        if (errors.Count > 0)
-            throw new InvalidOperationException($"Невалидное отсутствие: {string.Join(", ", errors)}");
-
-        _absences[index] = absence;
         OnAbsencesChanged();
     }
 
@@ -597,18 +473,7 @@ public class ResourceService
     /// </summary>
     public IEnumerable<Resource> GetResourcesForTask(Task task)
     {
-        if (task == null) return Enumerable.Empty<Resource>();
         return GetResourcesForTask(task.Id);
-    }
-
-    /// <summary>
-    /// Получает все задачи, на которые назначен ресурс.
-    /// </summary>
-    public IEnumerable<Guid> GetTasksForResource(Guid resourceId)
-    {
-        return _assignments
-            .Where(a => a.ResourceId == resourceId)
-            .Select(a => a.TaskId);
     }
 
     /// <summary>
@@ -622,15 +487,6 @@ public class ResourceService
             return string.Empty;
 
         return string.Join(separator, resources.Select(r => r.Initials));
-    }
-
-    /// <summary>
-    /// Получает строку с инициалами всех ресурсов задачи (перегрузка).
-    /// </summary>
-    public string GetInitialsForTask(Task task, string separator = ", ")
-    {
-        if (task == null) return string.Empty;
-        return GetInitialsForTask(task.Id, separator);
     }
 
     #endregion

@@ -156,12 +156,13 @@ public class DocumentExportData
         get
         {
             var height = GanttChart.TotalHeight;
-            
+        
             if (EngagementStrip != null)
             {
-                height += SectionGap + EngagementStrip.Engagement.Height;
+                // Второй заголовок + отступ + EngagementStrip
+                height += GanttChart.Header.Height + SectionGap + EngagementStrip.Engagement.Height;
             }
-            
+        
             return height;
         }
     }

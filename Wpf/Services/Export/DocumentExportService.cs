@@ -96,6 +96,23 @@ public static class DocumentExportService
         fixedPage.Children.Add(todayClone);
 
         currentY += Math.Max(data.GanttChart.Grid.Height, data.GanttChart.Tasks.Height);
+        
+        // ═══════════════════════════════════════════════════════════════════
+        // 4.5. HEADER (второй - над EngagementStrip)
+        // ═══════════════════════════════════════════════════════════════════
+        if (data.EngagementStrip != null)
+        {
+            var headerClone2 = CloneCanvasAsVisual(
+                data.GanttChart.Header.Canvas,
+                data.GanttChart.Header.Width,
+                data.GanttChart.Header.Height);
+    
+            FixedPage.SetLeft(headerClone2, timelineOffsetX);
+            FixedPage.SetTop(headerClone2, currentY);
+            fixedPage.Children.Add(headerClone2);
+    
+            currentY += data.GanttChart.Header.Height;
+        }
 
         // ═══════════════════════════════════════════════════════════════════
         // 5. ENGAGEMENT STRIP (если есть)
