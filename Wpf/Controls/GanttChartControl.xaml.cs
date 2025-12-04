@@ -755,6 +755,15 @@ public partial class GanttChartControl : UserControl
     #region Public Methods
     
     /// <summary>
+    /// Устанавливает горизонтальный offset скролла (для синхронизации с EngagementStrip).
+    /// </summary>
+    public void SetHorizontalOffset(double offset)
+    {
+        ChartScrollViewer.ScrollToHorizontalOffset(offset);
+        // HeaderScrollViewer синхронизируется автоматически через OnChartScrollChanged
+    }
+    
+    /// <summary>
     /// Перерисовывает всю диаграмму.
     /// </summary>
     public void InvalidateChart()

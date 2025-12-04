@@ -81,6 +81,11 @@ public partial class ResourceEngagementStrip : UserControl
     #region Events
 
     public event EventHandler<Resource>? ResourceDoubleClicked;
+    
+    /// <summary>
+    /// Событие изменения горизонтального скролла (для синхронизации с GanttChart).
+    /// </summary>
+    public event EventHandler<double>? HorizontalScrollChanged;
 
     #endregion
 
@@ -182,13 +187,23 @@ public partial class ResourceEngagementStrip : UserControl
 
     private void TimelineScrollViewer_ScrollChanged(object sender, ScrollChangedEventArgs e)
     {
-        if (!_isUpdatingScroll && e.HorizontalChange != 0)
+        if (!_isUpdatingScroll)
         {
             _isUpdatingScroll = true;
-            HorizontalOffset = e.HorizontalOffset;
+        
+            // Обновляем DependencyProperty
+            if (e.HorizontalChange != 0)
+            {
+                HorizontalOffset = e.HorizontalOffset;
+            
+                // Уведомляем подписчиков (для синхронизации с GanttChart)
+                HorizontalScrollChanged?.Invoke(this, e.HorizontalOffset);
+            }
+        
             _isUpdatingScroll = false;
         }
 
+        // Вертикальная синхронизация имён ресурсов
         NamesScrollViewer.ScrollToVerticalOffset(e.VerticalOffset);
     }
 

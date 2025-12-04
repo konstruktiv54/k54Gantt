@@ -121,8 +121,18 @@ public partial class MainWindow : Window
             vm.ExportToPdfAction = ExportDocument;
             vm.EditNoteAction = GanttChart.EditNote;
         }
-        
-        // Синхронизация скролла
+    
+        // ═══════════════════════════════════════════════════════════════
+        // Двусторонняя синхронизация скролла
+        // ═══════════════════════════════════════════════════════════════
+    
+        // EngagementStrip → GanttChart (основной источник скролла)
+        EngagementStrip.HorizontalScrollChanged += (_, offset) =>
+        {
+            GanttChart.SetHorizontalOffset(offset);
+        };
+    
+        // GanttChart → EngagementStrip (для скролла колёсиком в области диаграммы)
         GanttChart.HorizontalScrollChanged += (_, offset) =>
         {
             EngagementStrip.HorizontalOffset = offset;

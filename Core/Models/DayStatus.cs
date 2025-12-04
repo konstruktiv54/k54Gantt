@@ -186,19 +186,23 @@ public class DayStatus
     }
 
     /// <summary>
-    /// Создаёт статус для свободного дня.
+    /// Создаёт статус для дня отсутствия (отпуск, больничный и т.д.).
+    /// Назначения игнорируются, загрузка = 0.
     /// </summary>
-    public static DayStatus Free(TimeSpan day, Guid resourceId, int maxWorkload)
+    /// <param name="day">День.</param>
+    /// <param name="resourceId">ID ресурса.</param>
+    /// <param name="absenceReason">Причина отсутствия.</param>
+    public static DayStatus Absence(TimeSpan day, Guid resourceId, string? absenceReason)
     {
         return new DayStatus(
             day: day,
             resourceId: resourceId,
-            inParticipation: true,
-            maxWorkload: maxWorkload,
-            inAbsence: false,
-            absenceReason: null,
+            inParticipation: false,  // В отпуске не работаем
+            maxWorkload: 0,
+            inAbsence: true,
+            absenceReason: absenceReason,
             assignments: Array.Empty<ResourceAssignment>(),
             allocationPercent: 0,
-            state: DayState.Free);
+            state: DayState.Absence);
     }
 }
