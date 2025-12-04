@@ -6,6 +6,7 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Core.Models;
 using Core.Services;
+using Core.Services.UndoRedo;
 using Microsoft.Win32;
 using Wpf.Controls;
 using Wpf.Services;
@@ -40,6 +41,19 @@ public partial class MainViewModel : ObservableObject
     private const int DebounceDelayMs = 50;
     private readonly AutoSaveManager _autoSaveManager;
     private TaskClipboard? _clipboard;
+    private readonly UndoRedoService _undoRedoService;
+
+
+    #endregion
+
+    #region UndoReDo Properties
+    
+    public UndoRedoService UndoRedoService => _undoRedoService;
+
+    public bool CanUndo => _undoRedoService.CanUndo;
+    public bool CanRedo => _undoRedoService.CanRedo;
+    public string? UndoDescription => _undoRedoService.UndoDescription;
+    public string? RedoDescription => _undoRedoService.RedoDescription;
 
     #endregion
 
@@ -274,13 +288,15 @@ public partial class MainViewModel : ObservableObject
         ResourceService resourceService,
         EngagementCalculationService engagementService,
         AutoSaveManager autoSaveManager,
-        TaskCopyService copyService)
+        TaskCopyService copyService,
+        UndoRedoService undoRedoService)
     {
         _fileService = fileService;
         _resourceService = resourceService;
         _engagementService = engagementService;
         _autoSaveManager = autoSaveManager;
         _copyService = copyService;
+        _undoRedoService = undoRedoService;
 
         // Связываем FileService с ResourceService
         _fileService.ResourceService = _resourceService;
@@ -296,6 +312,9 @@ public partial class MainViewModel : ObservableObject
         _flatListUpdateTimer = new Timer(DebounceDelayMs);
         _flatListUpdateTimer.AutoReset = false;
         _flatListUpdateTimer.Elapsed += OnFlatListUpdateTimerElapsed;
+        
+        // Подписка на изменения состояния
+        _undoRedoService.StateChanged += OnUndoRedoStateChanged;
 
         // Создаём новый проект по умолчанию
         CreateNewProject();
@@ -353,6 +372,9 @@ public partial class MainViewModel : ObservableObject
             UpdateTaskCount();
             HasUnsavedChanges = false;
 
+            // Очищаем историю Undo/Redo
+            _undoRedoService.Clear();
+            
             // Сохраняем путь к последнему файлу
             SettingsService.LastOpenedFile = dialog.FileName;
             _autoSaveManager.StartAutoSave();
@@ -568,6 +590,30 @@ public partial class MainViewModel : ObservableObject
 
             StatusText = $"Ресурсы назначены на '{SelectedTask.Name}'";
         }
+    }
+
+    #endregion
+
+    #region  UndoRedo Commands
+
+    [RelayCommand(CanExecute = nameof(CanUndo))]
+    private void Undo()
+    {
+        _undoRedoService.Undo();
+        RebuildHierarchy();
+        RefreshGanttChart();
+        MarkAsModified();
+        StatusText = $"Отменено: {_undoRedoService.RedoDescription}";
+    }
+
+    [RelayCommand(CanExecute = nameof(CanRedo))]
+    private void Redo()
+    {
+        _undoRedoService.Redo();
+        RebuildHierarchy();
+        RefreshGanttChart();
+        MarkAsModified();
+        StatusText = $"Повторено: {_undoRedoService.UndoDescription}";
     }
 
     #endregion
@@ -997,6 +1043,16 @@ public partial class MainViewModel : ObservableObject
 
     #region Private Methods
 
+    private void OnUndoRedoStateChanged(object? sender, EventArgs e)
+    {
+        OnPropertyChanged(nameof(CanUndo));
+        OnPropertyChanged(nameof(CanRedo));
+        OnPropertyChanged(nameof(UndoDescription));
+        OnPropertyChanged(nameof(RedoDescription));
+        UndoCommand.NotifyCanExecuteChanged();
+        RedoCommand.NotifyCanExecuteChanged();
+    }
+    
     private void CreateNewProject()
     {
         ProjectManager = new ProjectManager
@@ -1011,6 +1067,9 @@ public partial class MainViewModel : ObservableObject
 
         // Очищаем ресурсы
         _resourceService.Clear();
+        
+        // Очищаем историю Undo/Redo
+        _undoRedoService.Clear();
     }
 
     /// <summary>
@@ -1213,9 +1272,13 @@ public partial class MainViewModel : ObservableObject
         OnPropertyChanged(nameof(CanDeleteTask));
         OnPropertyChanged(nameof(CanEditNote));
         OnPropertyChanged(nameof(CanPaste)); 
+        OnPropertyChanged(nameof(CanUndo));
+        OnPropertyChanged(nameof(CanRedo));
         
         CopyTaskCommand.NotifyCanExecuteChanged();
         PasteTaskCommand.NotifyCanExecuteChanged();
+        UndoCommand.NotifyCanExecuteChanged();
+        RedoCommand.NotifyCanExecuteChanged();
     }
     
     private void InitializeHierarchyBuilder()

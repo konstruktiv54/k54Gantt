@@ -40,6 +40,9 @@
         <KeyBinding Key="C" Modifiers="Ctrl" Command="{Binding CopyTaskCommand}" />
         <KeyBinding Key="V" Modifiers="Ctrl" Command="{Binding PasteTaskCommand}" />
         <KeyBinding Key="F2" Command="{Binding EditNoteCommand}"/>
+        <KeyBinding Key="Z" Modifiers="Ctrl" Command="{Binding UndoCommand}" />
+        <KeyBinding Key="Y" Modifiers="Ctrl" Command="{Binding RedoCommand}" />
+        <KeyBinding Key="Z" Modifiers="Ctrl+Shift" Command="{Binding RedoCommand}" />
     </Window.InputBindings>
 
     <!-- ═══════════════════════════════════════════════════════════════ -->
@@ -149,6 +152,37 @@
             
             <!-- Edit Menu -->
             <MenuItem Header="_Правка">
+                <!-- Undo -->
+                <MenuItem Header="_Отменить" 
+                          Command="{Binding UndoCommand}"
+                          InputGestureText="Ctrl+Z">
+                    <MenuItem.Icon>
+                        <materialDesign:PackIcon Kind="Undo" />
+                    </MenuItem.Icon>
+                    <MenuItem.ToolTip>
+                        <TextBlock>
+                            <Run Text="Отменить: "/>
+                            <Run Text="{Binding UndoDescription, FallbackValue='(нет действий)'}" />
+                        </TextBlock>
+                    </MenuItem.ToolTip>
+                </MenuItem>
+    
+                <!-- Redo -->
+                <MenuItem Header="По_вторить" 
+                          Command="{Binding RedoCommand}"
+                          InputGestureText="Ctrl+Y">
+                    <MenuItem.Icon>
+                        <materialDesign:PackIcon Kind="Redo" />
+                    </MenuItem.Icon>
+                    <MenuItem.ToolTip>
+                        <TextBlock>
+                            <Run Text="Повторить: "/>
+                            <Run Text="{Binding RedoDescription, FallbackValue='(нет действий)'}" />
+                        </TextBlock>
+                    </MenuItem.ToolTip>
+                </MenuItem>
+    
+                <Separator />
                 <MenuItem Header="Добавить задачу" 
                           Command="{Binding AddTaskCommand}"
                           InputGestureText="Ctrl+T"/>
@@ -235,6 +269,17 @@
                     <TextBlock Text="{Binding ZoomLevel, StringFormat={}{0}%}" 
                                Style="{StaticResource StatusBarTextStyle}" 
                                Margin="0"/>
+                </StackPanel>
+            </StatusBarItem>
+            
+            <Separator />
+    
+            <StatusBarItem>
+                <StackPanel Orientation="Horizontal">
+                    <TextBlock Text="Undo: " Foreground="Gray" />
+                    <TextBlock Text="{Binding UndoRedoService.UndoCount}" />
+                    <TextBlock Text=" | Redo: " Foreground="Gray" />
+                    <TextBlock Text="{Binding UndoRedoService.RedoCount}" />
                 </StackPanel>
             </StatusBarItem>
         </StatusBar>
@@ -482,11 +527,15 @@
                 <controls:GanttChartControl
                     x:Name="GanttChart"
                     ProjectManager="{Binding ProjectManager}"
-                    ZoomLevel="{Binding ZoomLevel, Mode=TwoWay}"
-                    SelectedTask="{Binding SelectedTask, Mode=TwoWay}"
                     ResourceService="{Binding ResourceService}"
-                    TaskDoubleClicked="GanttChart_TaskDoubleClicked"
-                    Tag="{Binding}">
+                    UndoRedoService="{Binding UndoRedoService}"
+                    SelectedTask="{Binding SelectedTask, Mode=TwoWay}"
+                    ZoomLevel="{Binding ZoomLevel}"
+                    ColumnWidth="{Binding ColumnWidth}"
+                    ShowRelations="True"
+                    ShowTodayLine="True"
+                    HighlightWeekends="True"
+                    TaskDoubleClicked="GanttChart_TaskDoubleClicked">
                     <controls:GanttChartControl.ContextMenu>
                         <ContextMenu DataContext="{Binding PlacementTarget.Tag, RelativeSource={RelativeSource Self}}">
                             <MenuItem Header="Добавить задачу" Command="{Binding AddTaskCommand}"/>
