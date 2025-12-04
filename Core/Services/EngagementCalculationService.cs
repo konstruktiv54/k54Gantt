@@ -105,27 +105,27 @@ public class EngagementCalculationService
         {
             return DayState.Weekend;
         }
-        
+
+        // ═══ ПРОВЕРКА ОТСУТСТВИЯ (второй приоритет) ═══
+        if (_resourceService.IsResourceAbsent(resourceId, day))
+        {
+            return DayState.Absence;
+        }
+
         // 1. Проверяем участие в проекте
         var interval = _resourceService.GetParticipationIntervalForDay(resourceId, day);
         bool inParticipation = interval != null;
         int maxWorkload = interval?.MaxWorkload ?? 0;
 
-        // 2. Проверяем отсутствие
-        bool inAbsence = _resourceService.IsResourceAbsent(resourceId, day);
-
-        // 3. Получаем назначения и загрузку (завершённые задачи уже отфильтрованы)
+        // 2. Получаем назначения и загрузку
         var assignments = GetAssignmentsForDay(resourceId, day);
         int allocationPercent = CalculateAllocationPercent(resourceId, day);
         bool hasAssignments = assignments.Count > 0;
 
-        // 4. Определяем состояние по приоритетам
+        // 3. Определяем состояние (без Absence — уже обработано)
 
-        // Overbooked: перегрузка ИЛИ (назначение + отсутствие) ИЛИ (назначение + неучастие)
+        // Overbooked: перегрузка ИЛИ назначение вне участия
         if (allocationPercent > maxWorkload && inParticipation)
-            return DayState.Overbooked;
-
-        if (hasAssignments && inAbsence)
             return DayState.Overbooked;
 
         if (hasAssignments && !inParticipation)
@@ -134,10 +134,6 @@ public class EngagementCalculationService
         // Не участвует (без назначений)
         if (!inParticipation)
             return DayState.NotParticipating;
-
-        // Отсутствует (без назначений)
-        if (inAbsence)
-            return DayState.Absence;
 
         // Assigned: загрузка = максимум
         if (allocationPercent >= maxWorkload && maxWorkload > 0)
@@ -164,7 +160,14 @@ public class EngagementCalculationService
         {
             return DayStatus.Weekend(day, resourceId);
         }
-        
+
+        // ═══ ПРОВЕРКА ОТСУТСТВИЯ (второй приоритет) ═══
+        var absence = _resourceService.GetAbsenceForDay(resourceId, day);
+        if (absence != null)
+        {
+            return DayStatus.Absence(day, resourceId, absence.Reason);
+        }
+
         var resource = _resourceService.GetResourceById(resourceId);
         if (resource == null)
             return DayStatus.NotParticipating(day, resourceId);
@@ -174,18 +177,14 @@ public class EngagementCalculationService
         bool inParticipation = interval != null;
         int maxWorkload = interval?.MaxWorkload ?? 0;
 
-        // Отсутствие
-        var absence = _resourceService.GetAbsenceForDay(resourceId, day);
-        bool inAbsence = absence != null;
-        string? absenceReason = absence?.Reason;
-
-        // Назначения и загрузка (завершённые задачи уже отфильтрованы)
+        // Назначения и загрузка (только для рабочих дней)
         var assignments = GetAssignmentsForDay(resourceId, day);
         int allocationPercent = CalculateAllocationPercentInternal(resource.Role, assignments);
 
-        // Состояние
+        // Состояние (без проверки отсутствия — уже обработано выше)
         var state = CalculateDayStateInternal(
-            inParticipation, maxWorkload, inAbsence, 
+            inParticipation, maxWorkload, 
+            inAbsence: false,  // Отсутствие уже обработано
             assignments.Count > 0, allocationPercent);
 
         return new DayStatus(
@@ -193,8 +192,8 @@ public class EngagementCalculationService
             resourceId: resourceId,
             inParticipation: inParticipation,
             maxWorkload: maxWorkload,
-            inAbsence: inAbsence,
-            absenceReason: absenceReason,
+            inAbsence: false,
+            absenceReason: null,
             assignments: assignments,
             allocationPercent: allocationPercent,
             state: state);
@@ -403,15 +402,14 @@ public class EngagementCalculationService
     private DayState CalculateDayStateInternal(
         bool inParticipation,
         int maxWorkload,
-        bool inAbsence,
+        bool inAbsence,      // Оставляем параметр для обратной совместимости, но не используем
         bool hasAssignments,
         int allocationPercent)
     {
-        // Overbooked conditions
+        // Примечание: Weekend и Absence обрабатываются раньше в GetDayStatus()
+    
+        // Overbooked: перегрузка ИЛИ назначение вне участия
         if (allocationPercent > maxWorkload && inParticipation)
-            return DayState.Overbooked;
-
-        if (hasAssignments && inAbsence)
             return DayState.Overbooked;
 
         if (hasAssignments && !inParticipation)
@@ -419,9 +417,6 @@ public class EngagementCalculationService
 
         if (!inParticipation)
             return DayState.NotParticipating;
-
-        if (inAbsence)
-            return DayState.Absence;
 
         if (allocationPercent >= maxWorkload && maxWorkload > 0)
             return DayState.Assigned;
