@@ -31,10 +31,11 @@ public partial class GanttChartControl : UserControl
     private readonly TaskRenderer _taskRenderer;
 
     private bool _isRendering;
+    private System.Windows.Threading.DispatcherTimer? _zoomDebounceTimer;
+    private const int ZoomDebounceMs = 50;
     
     // Drag & Drop — НЕ readonly, чтобы можно было сбрасывать
     private DragState? _dragState;
-    private const double EdgeZoneWidth = 8.0;
     private const double MinDurationDays = 1.0;
     private const double PixelsPerProgressPercent = 3.0;
     private const double DeadlineGrabZone = 8.0;
@@ -313,6 +314,11 @@ public partial class GanttChartControl : UserControl
     /// Событие модификации задачи (для обновления UI).
     /// </summary>
     public event EventHandler<TaskDragEventArgs>? TaskModified;
+    
+    /// <summary>
+    /// Событие изменения вертикального скролла (для синхронизации с Sidebar).
+    /// </summary>
+    public event EventHandler<double>? VerticalScrollChanged;
 
     #endregion
 
@@ -321,6 +327,17 @@ public partial class GanttChartControl : UserControl
     public GanttChartControl()
     {
         InitializeComponent();
+        
+        // Таймер debounce для плавного зума
+        _zoomDebounceTimer = new System.Windows.Threading.DispatcherTimer
+        {
+            Interval = TimeSpan.FromMilliseconds(ZoomDebounceMs)
+        };
+        _zoomDebounceTimer.Tick += (_, _) =>
+        {
+            _zoomDebounceTimer.Stop();
+            InvalidateChart();
+        };
 
         // Инициализация рендереров
         _gridRenderer = new GridRenderer(this);
@@ -368,8 +385,12 @@ public partial class GanttChartControl : UserControl
     {
         if (d is GanttChartControl control)
         {
-            var baseWidth = 30.0; // ДОЛЖНО БЫТЬ 30.0 как в MainViewModel
+            var baseWidth = 30.0;
             control.ColumnWidth = baseWidth * control.ZoomLevel / 100.0;
+        
+            // Debounce: перерисовка только после паузы в скролле
+            control._zoomDebounceTimer?.Stop();
+            control._zoomDebounceTimer?.Start();
         }
     }
 
@@ -398,8 +419,18 @@ public partial class GanttChartControl : UserControl
 
     private void OnChartScrollChanged(object sender, ScrollChangedEventArgs e)
     {
+        // Горизонтальная синхронизация (заголовок + EngagementStrip)
         HeaderScrollViewer.ScrollToHorizontalOffset(e.HorizontalOffset);
-        HorizontalScrollChanged?.Invoke(this, e.HorizontalOffset);
+        if (e.HorizontalChange != 0)
+        {
+            HorizontalScrollChanged?.Invoke(this, e.HorizontalOffset);
+        }
+    
+        // Вертикальная синхронизация (Sidebar)
+        if (e.VerticalChange != 0)
+        {
+            VerticalScrollChanged?.Invoke(this, e.VerticalOffset);
+        }
     }
     
     private void OnPreviewMouseWheel(object sender, MouseWheelEventArgs e)
@@ -751,7 +782,15 @@ public partial class GanttChartControl : UserControl
     }
 
     #endregion
-
+    
+    /// <summary>
+    /// Устанавливает вертикальный offset скролла (для синхронизации с Sidebar).
+    /// </summary>
+    public void SetVerticalOffset(double offset)
+    {
+        ChartScrollViewer.ScrollToVerticalOffset(offset);
+    }
+    
     #region Public Methods
     
     /// <summary>

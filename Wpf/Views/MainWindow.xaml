@@ -291,7 +291,7 @@
             <Grid.RowDefinitions>
                 <RowDefinition Height="*"/>
                 <RowDefinition Height="Auto"/>
-                <RowDefinition Height="150" MinHeight="80" MaxHeight="500"/>
+                <RowDefinition Height="Auto"/>
             </Grid.RowDefinitions>
             
             <Grid.ColumnDefinitions>
@@ -306,44 +306,26 @@
             <Border Grid.Row="0" Grid.Column="0"
                     Background="{StaticResource SidebarBackgroundBrush}"
                     BorderBrush="{StaticResource GridLineBrush}"
-                    BorderThickness="0,0,0,1">
-                <DockPanel>
-                    <!-- Toolbar -->
-                    <ToolBar DockPanel.Dock="Top" Style="{StaticResource SidebarToolbarStyle}">
-                        <Button Command="{Binding AddTaskCommand}" ToolTip="Добавить задачу (Ctrl+T)">
-                            <icon:MaterialIcon Kind="Plus" Width="18" Height="18"/>
-                        </Button>
-                        <Button Command="{Binding AddSubtaskCommand}" ToolTip="Добавить подзадачу (Ctrl+Shift+T)">
-                            <icon:MaterialIcon Kind="SubdirectoryArrowRight" Width="18" Height="18"/>
-                        </Button>
-                        <Separator/>
-                        <Button Command="{Binding MakeGroupCommand}" ToolTip="Создать группу (Ctrl+G)">
-                            <icon:MaterialIcon Kind="FolderPlus" Width="18" Height="18"/>
-                        </Button>
-                        <Button Command="{Binding UngroupCommand}" ToolTip="Разгруппировать (Ctrl+Shift+G)">
-                            <icon:MaterialIcon Kind="FolderRemove" Width="18" Height="18"/>
-                        </Button>
-                        <Separator/>
-                        <Button Command="{Binding DeleteTaskCommand}" ToolTip="Удалить (Delete)">
-                            <icon:MaterialIcon Kind="Delete" Width="18" Height="18" Foreground="#D32F2F"/>
-                        </Button>
-                    </ToolBar>
-
-                    <!-- DataGrid с задачами -->
-                    <DataGrid x:Name="TasksDataGrid"
-                              ItemsSource="{Binding FlatTasks}"
-                              SelectedItem="{Binding SelectedTaskItem, Mode=TwoWay}"
-                              AutoGenerateColumns="False"
-                              CanUserAddRows="False"
-                              CanUserDeleteRows="False"
-                              SelectionMode="Single"
-                              SelectionUnit="FullRow"
-                              GridLinesVisibility="Horizontal"
-                              HorizontalGridLinesBrush="{StaticResource GridLineBrush}"
-                              Background="{StaticResource SidebarBackgroundBrush}"
-                              RowHeight="28"
-                              HeadersVisibility="Column"
-                              ContextMenu="{StaticResource TaskContextMenu}">
+                    BorderThickness="0"
+                    MaxHeight="{Binding EngagementStripMaxHeight}">
+    
+                <!-- DataGrid с задачами -->
+                <DataGrid x:Name="TasksDataGrid"
+                          ItemsSource="{Binding FlatTasks}"
+                          SelectedItem="{Binding SelectedTaskItem, Mode=TwoWay}"
+                          AutoGenerateColumns="False"
+                          CanUserAddRows="False"
+                          CanUserDeleteRows="False"
+                          SelectionMode="Single"
+                          SelectionUnit="FullRow"
+                          GridLinesVisibility="Horizontal"
+                          HorizontalGridLinesBrush="{StaticResource GridLineBrush}"
+                          Background="{StaticResource SidebarBackgroundBrush}"
+                          RowHeight="28"
+                          ColumnHeaderHeight="50"
+                          HeadersVisibility="Column"
+                          VirtualizingPanel.ScrollUnit="Pixel"
+                          ContextMenu="{StaticResource TaskContextMenu}">
                         <DataGrid.Columns>
                             <!-- ═══════════════════════════════════════════════════════════ -->
                             <!-- Имя задачи с отступом по уровню                             -->
@@ -507,7 +489,6 @@
                             </DataGridTemplateColumn>
                         </DataGrid.Columns>
                     </DataGrid>
-                </DockPanel>
             </Border>
 
             <!-- ═══════════════════════════════════════════════════════════ -->
@@ -531,7 +512,7 @@
                     ResourceService="{Binding ResourceService}"
                     UndoRedoService="{Binding UndoRedoService}"
                     SelectedTask="{Binding SelectedTask, Mode=TwoWay}"
-                    ZoomLevel="{Binding ZoomLevel}"
+                    ZoomLevel="{Binding ZoomLevel, Mode=TwoWay}"
                     ColumnWidth="{Binding ColumnWidth}"
                     ShowRelations="True"
                     ShowTodayLine="True"
@@ -640,7 +621,8 @@
             <!-- ═══════════════════════════════════════════════════════════ -->
             <Border Grid.Row="2" Grid.Column="2"
                     BorderBrush="{StaticResource GridLineBrush}"
-                    BorderThickness="0">
+                    BorderThickness="0"
+                    MaxHeight="{Binding EngagementStripMaxHeight}">
                 <controls:ResourceEngagementStrip
                     x:Name="EngagementStrip"
                     ResourceService="{Binding ResourceService}"

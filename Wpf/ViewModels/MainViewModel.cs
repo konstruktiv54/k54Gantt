@@ -59,6 +59,12 @@ public partial class MainViewModel : ObservableObject
 
     #region Observable Properties
     
+    /// <summary>
+    /// Максимальная высота ResourceEngagementStrip (по количеству ресурсов).
+    /// </summary>
+    public double EngagementStripMaxHeight => 
+        Math.Max(24, (_resourceService?.Resources.Count() ?? 0) * 24);
+    
     // Для ресурсов (прокси к ResourceService)
     public IEnumerable<Resource> Resources => ResourceService?.Resources ?? Enumerable.Empty<Resource>();
     
@@ -91,12 +97,14 @@ public partial class MainViewModel : ObservableObject
         {
             InitializeHierarchyBuilder();
             RebuildHierarchy();
-            
-            // Связываем с EngagementService
+        
             if (EngagementService != null)
             {
                 EngagementService.ProjectManager = value;
             }
+        
+            // Обновляем высоту EngagementStrip
+            OnPropertyChanged(nameof(EngagementStripMaxHeight));
         }
     }
 
@@ -297,6 +305,9 @@ public partial class MainViewModel : ObservableObject
         _autoSaveManager = autoSaveManager;
         _copyService = copyService;
         _undoRedoService = undoRedoService;
+        
+        // Обновляем высоту EngagementStrip при изменении ресурсов
+        _resourceService.ResourcesChanged += (_, _) => OnPropertyChanged(nameof(EngagementStripMaxHeight));
 
         // Связываем FileService с ResourceService
         _fileService.ResourceService = _resourceService;
