@@ -526,6 +526,7 @@
 
                 <controls:GanttChartControl
                     x:Name="GanttChart"
+                    Tag="{Binding}"
                     ProjectManager="{Binding ProjectManager}"
                     ResourceService="{Binding ResourceService}"
                     UndoRedoService="{Binding UndoRedoService}"
