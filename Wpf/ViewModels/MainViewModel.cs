@@ -27,6 +27,8 @@ public partial class MainViewModel : ObservableObject
     private readonly FileService _fileService;
     private readonly ResourceService _resourceService;
     private readonly TaskCopyService _copyService;
+    private readonly ProductionCalendarService _calendarService;
+    private readonly WorkingDaysCalculator _workingDaysCalculator;
     
     public Func<string?, bool>? ExportToPdfAction { get; set; }
     public Func<string?, bool>? PrintAction { get; set; }
@@ -42,6 +44,7 @@ public partial class MainViewModel : ObservableObject
     private readonly AutoSaveManager _autoSaveManager;
     private TaskClipboard? _clipboard;
     private readonly UndoRedoService _undoRedoService;
+    
 
 
     #endregion
@@ -297,7 +300,9 @@ public partial class MainViewModel : ObservableObject
         EngagementCalculationService engagementService,
         AutoSaveManager autoSaveManager,
         TaskCopyService copyService,
-        UndoRedoService undoRedoService)
+        UndoRedoService undoRedoService,
+        ProductionCalendarService calendarService,
+        WorkingDaysCalculator workingDaysCalculator)
     {
         _fileService = fileService;
         _resourceService = resourceService;
@@ -305,11 +310,17 @@ public partial class MainViewModel : ObservableObject
         _autoSaveManager = autoSaveManager;
         _copyService = copyService;
         _undoRedoService = undoRedoService;
+        _calendarService = calendarService;
+        _workingDaysCalculator = workingDaysCalculator;
         
         // Обновляем высоту EngagementStrip при изменении ресурсов
         _resourceService.ResourcesChanged += (_, _) => OnPropertyChanged(nameof(EngagementStripMaxHeight));
 
-        // Связываем FileService с ResourceService
+        // Подписываемся на изменения праздников для перерисовки
+        _calendarService.HolidaysChanged += OnCalendarChanged;
+        _workingDaysCalculator.RecalculationNeeded += OnWorkingDaysRecalculationNeeded;
+
+        // Связываем FileService с ResourceService (ProductionCalendarService связывается в App.xaml.cs)
         _fileService.ResourceService = _resourceService;
 
         // Инициализация коллекций
@@ -330,6 +341,32 @@ public partial class MainViewModel : ObservableObject
         // Создаём новый проект по умолчанию
         CreateNewProject();
         _autoSaveManager.Initialize(this);
+    }
+
+    #endregion
+
+    #region Calendar Event Handlers
+
+    private void OnCalendarChanged(object? sender, EventArgs e)
+    {
+        // Перерисовываем диаграмму при изменении праздников
+        RefreshGanttChart();
+        MarkAsModified();
+    }
+
+    private void OnWorkingDaysRecalculationNeeded(object? sender, EventArgs e)
+    {
+        // Обновляем отображение рабочих дней в sidebar
+        if (FlatTasks != null)
+        {
+            foreach (var taskVm in FlatTasks)
+            {
+                taskVm.Refresh();
+            }
+        }
+        
+        // Перерисовываем диаграмму
+        RefreshGanttChart();
     }
 
     #endregion
@@ -540,15 +577,15 @@ public partial class MainViewModel : ObservableObject
     [RelayCommand]
     private void ManageResources()
     {
-        var projectStart = ProjectManager?.Start ?? DateTime.Today;
-        var dialog = new ResourceManagerDialog(_resourceService, projectStart)
+        var dialog = new ResourceManagerDialog(_resourceService, _calendarService, _projectManager)
         {
             Owner = Application.Current.MainWindow
         };
 
         dialog.ShowDialog();
 
-        // Перерисовываем диаграмму для обновления инициалов
+        // Перерисовываем диаграмму для обновления инициалов и праздников
+        RefreshGanttChart();
         StatusText = $"Ресурсов: {_resourceService.ResourceCount}";
         OnPropertyChanged(nameof(Resources));
     }
@@ -1076,8 +1113,9 @@ public partial class MainViewModel : ObservableObject
         TaskCount = 0;
         UpdateWindowTitle();
 
-        // Очищаем ресурсы
+        // Очищаем ресурсы и праздники
         _resourceService.Clear();
+        _calendarService.Clear();
         
         // Очищаем историю Undo/Redo
         _undoRedoService.Clear();
@@ -1413,6 +1451,16 @@ public partial class MainViewModel : ObservableObject
     /// Сервис ресурсов (для binding).
     /// </summary>
     public ResourceService ResourceService => _resourceService;
+
+    /// <summary>
+    /// Сервис производственного календаря (для binding).
+    /// </summary>
+    public ProductionCalendarService CalendarService => _calendarService;
+
+    /// <summary>
+    /// Калькулятор рабочих дней (для binding).
+    /// </summary>
+    public WorkingDaysCalculator WorkingDaysCalculator => _workingDaysCalculator;
 
     #endregion
     

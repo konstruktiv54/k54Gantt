@@ -5,11 +5,11 @@
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         xmlns:converters="clr-namespace:Wpf.Converters"
         mc:Ignorable="d"
-        Title="Управление ресурсами"
+        Title="Управление ресурсами и календарём"
         Height="900"
-        Width="900"
+        Width="1000"
         MinHeight="500"
-        MinWidth="600"
+        MinWidth="700"
         WindowStartupLocation="CenterOwner"
         ShowInTaskbar="False"
         ResizeMode="CanResize"
@@ -29,338 +29,409 @@
         <Grid.RowDefinitions>
             <RowDefinition Height="*"/>
             <RowDefinition Height="Auto"/>
-            <RowDefinition Height="Auto"/>
         </Grid.RowDefinitions>
 
-        <Grid.ColumnDefinitions>
-            <ColumnDefinition Width="*"/>
-            <ColumnDefinition Width="360"/>
-        </Grid.ColumnDefinitions>
+        <!-- TABCONTROL: РЕСУРСЫ И КАЛЕНДАРЬ -->
+        <TabControl Grid.Row="0" Margin="0,0,0,8">
+            
+            <!-- ВКЛАДКА: РЕСУРСЫ -->
+            <TabItem Header="Ресурсы">
+                <Grid Margin="8">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="*"/>
+                        <RowDefinition Height="Auto"/>
+                    </Grid.RowDefinitions>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="360"/>
+                    </Grid.ColumnDefinitions>
 
-        <!-- ═══════════════════════════════════════════════════════════════ -->
-        <!-- СПИСОК РЕСУРСОВ                                                 -->
-        <!-- ═══════════════════════════════════════════════════════════════ -->
-        <GroupBox Grid.Row="0" Grid.Column="0" 
-                  Header="Ресурсы" 
-                  Margin="0,0,8,0">
-            <DataGrid x:Name="ResourcesGrid"
-                      ItemsSource="{Binding Resources}"
-                      SelectedItem="{Binding SelectedResource, Mode=TwoWay}"
-                      AutoGenerateColumns="False"
-                      CanUserAddRows="False"
-                      CanUserDeleteRows="False"
-                      IsReadOnly="True"
-                      SelectionMode="Single"
-                      SelectionUnit="FullRow"
-                      GridLinesVisibility="Horizontal"
-                      HorizontalGridLinesBrush="{StaticResource GridLineBrush}"
-                      Background="{StaticResource BackgroundBrush}"
-                      RowHeight="32"
-                      HeadersVisibility="Column">
-                
-                <DataGrid.Columns>
-                    <!-- Цвет -->
-                    <DataGridTemplateColumn Header="" Width="30">
-                        <DataGridTemplateColumn.CellTemplate>
-                            <DataTemplate>
-                                <Border Width="20" Height="20" 
-                                        CornerRadius="3"
-                                        BorderBrush="{StaticResource GridLineBrush}"
-                                        BorderThickness="1"
-                                        HorizontalAlignment="Center">
-                                    <Border.Background>
-                                        <SolidColorBrush Color="{Binding ColorHex, 
-                                            Converter={StaticResource HexToColorConverter}, 
-                                            FallbackValue=#4682B4}"/>
-                                    </Border.Background>
-                                </Border>
-                            </DataTemplate>
-                        </DataGridTemplateColumn.CellTemplate>
-                    </DataGridTemplateColumn>
-                    <!-- Инициалы -->
-                    <DataGridTextColumn Header="Инициалы" 
-                                        Binding="{Binding Initials}" 
-                                        Width="80"/>
-                    
-                    <!-- Имя -->
-                    <DataGridTextColumn Header="Имя" 
-                                        Binding="{Binding Name}" 
-                                        Width="*"/>
-                    
-                    <!-- Роль -->
-                    <DataGridTextColumn Header="Роль" 
-                                        Binding="{Binding Role, Converter={StaticResource EnumToDisplayNameConverter}}" 
-                                        Width="150"/>
-                </DataGrid.Columns>
-            </DataGrid>
-        </GroupBox>
+                    <!-- СПИСОК РЕСУРСОВ -->
+                    <GroupBox Grid.Row="0" Grid.Column="0" 
+                              Header="Ресурсы" 
+                              Margin="0,0,8,0">
+                        <DataGrid x:Name="ResourcesGrid"
+                                  ItemsSource="{Binding ResourceViewModel.Resources}"
+                                  SelectedItem="{Binding ResourceViewModel.SelectedResource, Mode=TwoWay}"
+                                  AutoGenerateColumns="False"
+                                  CanUserAddRows="False"
+                                  CanUserDeleteRows="False"
+                                  IsReadOnly="True"
+                                  SelectionMode="Single"
+                                  SelectionUnit="FullRow"
+                                  GridLinesVisibility="Horizontal"
+                                  HorizontalGridLinesBrush="{StaticResource GridLineBrush}"
+                                  Background="{StaticResource BackgroundBrush}"
+                                  RowHeight="32"
+                                  HeadersVisibility="Column">
+                            
+                            <DataGrid.Columns>
+                                <!-- Цвет -->
+                                <DataGridTemplateColumn Header="" Width="30">
+                                    <DataGridTemplateColumn.CellTemplate>
+                                        <DataTemplate>
+                                            <Border Width="20" Height="20" 
+                                                    CornerRadius="3"
+                                                    BorderBrush="{StaticResource GridLineBrush}"
+                                                    BorderThickness="1"
+                                                    HorizontalAlignment="Center">
+                                                <Border.Background>
+                                                    <SolidColorBrush Color="{Binding ColorHex, 
+                                                        Converter={StaticResource HexToColorConverter}, 
+                                                        FallbackValue=#4682B4}"/>
+                                                </Border.Background>
+                                            </Border>
+                                        </DataTemplate>
+                                    </DataGridTemplateColumn.CellTemplate>
+                                </DataGridTemplateColumn>
+                                <!-- Инициалы -->
+                                <DataGridTextColumn Header="Инициалы" 
+                                                    Binding="{Binding Initials}" 
+                                                    Width="80"/>
+                                
+                                <!-- Имя -->
+                                <DataGridTextColumn Header="Имя" 
+                                                    Binding="{Binding Name}" 
+                                                    Width="*"/>
+                                
+                                <!-- Роль -->
+                                <DataGridTextColumn Header="Роль" 
+                                                    Binding="{Binding Role, Converter={StaticResource EnumToDisplayNameConverter}}" 
+                                                    Width="150"/>
+                            </DataGrid.Columns>
+                        </DataGrid>
+                    </GroupBox>
 
-        <!-- ═══════════════════════════════════════════════════════════════ -->
-        <!-- ФОРМА РЕДАКТИРОВАНИЯ                                            -->
-        <!-- ═══════════════════════════════════════════════════════════════ -->
-        <GroupBox Grid.Row="0" Grid.Column="1" 
-                  Header="{Binding IsEditMode, Converter={StaticResource BoolToEditModeHeaderConverter}}">
-            <ScrollViewer VerticalScrollBarVisibility="Auto">
-                <StackPanel Margin="8">
-                
-                    <!-- Имя -->
-                    <TextBlock Text="Имя:" Margin="0,0,0,4"/>
-                    <TextBox Text="{Binding EditName, UpdateSourceTrigger=PropertyChanged}"
-                             Margin="0,0,0,12"/>
+                    <!-- ФОРМА РЕДАКТИРОВАНИЯ РЕСУРСА -->
+                    <GroupBox Grid.Row="0" Grid.Column="1" 
+                              Header="{Binding ResourceViewModel.IsEditMode, Converter={StaticResource BoolToEditModeHeaderConverter}}">
+                        <ScrollViewer VerticalScrollBarVisibility="Auto">
+                            <StackPanel Margin="8">
+                            
+                                <!-- Имя -->
+                                <TextBlock Text="Имя:" Margin="0,0,0,4"/>
+                                <TextBox Text="{Binding ResourceViewModel.EditName, UpdateSourceTrigger=PropertyChanged}"
+                                         Margin="0,0,0,12"/>
 
-                    <!-- Инициалы -->
-                    <TextBlock Text="Инициалы:" Margin="0,0,0,4"/>
-                    <TextBox Text="{Binding EditInitials, UpdateSourceTrigger=PropertyChanged}"
-                             MaxLength="12"
-                             Margin="0,0,0,12"/>
+                                <!-- Инициалы -->
+                                <TextBlock Text="Инициалы:" Margin="0,0,0,4"/>
+                                <TextBox Text="{Binding ResourceViewModel.EditInitials, UpdateSourceTrigger=PropertyChanged}"
+                                         MaxLength="12"
+                                         Margin="0,0,0,12"/>
 
-                    <!-- Роль -->
-                    <TextBlock Text="Роль:" Margin="0,0,0,4"/>
-                    <ComboBox SelectedItem="{Binding EditRole}"
-                              ItemsSource="{Binding AvailableRoles}"
-                              Margin="0,0,0,12">
-                        <ComboBox.ItemTemplate>
-                            <DataTemplate>
-                                <TextBlock Text="{Binding Converter={StaticResource EnumToDisplayNameConverter}}"/>
-                            </DataTemplate>
-                        </ComboBox.ItemTemplate>
-                    </ComboBox>
+                                <!-- Роль -->
+                                <TextBlock Text="Роль:" Margin="0,0,0,4"/>
+                                <ComboBox SelectedItem="{Binding ResourceViewModel.EditRole}"
+                                          ItemsSource="{Binding ResourceViewModel.AvailableRoles}"
+                                          Margin="0,0,0,12">
+                                    <ComboBox.ItemTemplate>
+                                        <DataTemplate>
+                                            <TextBlock Text="{Binding Converter={StaticResource EnumToDisplayNameConverter}}"/>
+                                        </DataTemplate>
+                                    </ComboBox.ItemTemplate>
+                                </ComboBox>
 
-                    <!-- Цвет -->
-                    <TextBlock Text="Цвет:" Margin="0,0,0,4"/>
-                    <Grid Margin="0,0,0,12">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="*"/>
-                            <ColumnDefinition Width="40"/>
-                        </Grid.ColumnDefinitions>
-                    
-                        <TextBox Grid.Column="0" 
-                                 Text="{Binding EditColorHex, UpdateSourceTrigger=PropertyChanged}"
-                                 Margin="0,0,8,0"/>
-                    
-                        <Border Grid.Column="1" 
-                                CornerRadius="3"
-                                BorderBrush="{StaticResource GridLineBrush}"
-                                BorderThickness="1">
-                            <Border.Background>
-                                <SolidColorBrush Color="{Binding EditColorHex, 
-                                    Converter={StaticResource HexToColorConverter}, 
-                                    FallbackValue=#4682B4}"/>
-                            </Border.Background>
-                        </Border>
-                    </Grid>
+                                <!-- Цвет -->
+                                <TextBlock Text="Цвет:" Margin="0,0,0,4"/>
+                                <Grid Margin="0,0,0,12">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="40"/>
+                                    </Grid.ColumnDefinitions>
+                                
+                                    <TextBox Grid.Column="0" 
+                                             Text="{Binding ResourceViewModel.EditColorHex, UpdateSourceTrigger=PropertyChanged}"
+                                             Margin="0,0,8,0"/>
+                                
+                                    <Border Grid.Column="1" 
+                                            CornerRadius="3"
+                                            BorderBrush="{StaticResource GridLineBrush}"
+                                            BorderThickness="1">
+                                        <Border.Background>
+                                            <SolidColorBrush Color="{Binding ResourceViewModel.EditColorHex, 
+                                                Converter={StaticResource HexToColorConverter}, 
+                                                FallbackValue=#4682B4}"/>
+                                        </Border.Background>
+                                    </Border>
+                                </Grid>
 
-                    <!-- Предустановленные цвета -->
-                    <TextBlock Text="Быстрый выбор:" Margin="0,0,0,4" FontSize="11" 
-                               Foreground="{StaticResource TextSecondaryBrush}"/>
-                    <WrapPanel Margin="0,0,0,16">
-                        <Button Content="" Width="24" Height="24" Margin="2" Background="#4682B4" Click="ColorButton_Click" BorderThickness="1" BorderBrush="#3A6E9A"/>
-                        <Button Content="" Width="24" Height="24" Margin="2" Background="#2E8B57" Click="ColorButton_Click" BorderThickness="1" BorderBrush="#246B45"/>
-                        <Button Content="" Width="24" Height="24" Margin="2" Background="#CD5C5C" Click="ColorButton_Click" BorderThickness="1" BorderBrush="#A34A4A"/>
-                        <Button Content="" Width="24" Height="24" Margin="2" Background="#9370DB" Click="ColorButton_Click" BorderThickness="1" BorderBrush="#7558B0"/>
-                        <Button Content="" Width="24" Height="24" Margin="2" Background="#FF8C00" Click="ColorButton_Click" BorderThickness="1" BorderBrush="#CC7000"/>
-                        <Button Content="" Width="24" Height="24" Margin="2" Background="#20B2AA" Click="ColorButton_Click" BorderThickness="1" BorderBrush="#198E88"/>
-                    </WrapPanel>
+                                <!-- Предустановленные цвета -->
+                                <TextBlock Text="Быстрый выбор:" Margin="0,0,0,4" FontSize="11" 
+                                           Foreground="{StaticResource TextSecondaryBrush}"/>
+                                <WrapPanel Margin="0,0,0,16">
+                                    <Button Content="" Width="24" Height="24" Margin="2" Background="#4682B4" Click="ColorButton_Click" BorderThickness="1" BorderBrush="#3A6E9A"/>
+                                    <Button Content="" Width="24" Height="24" Margin="2" Background="#2E8B57" Click="ColorButton_Click" BorderThickness="1" BorderBrush="#246B45"/>
+                                    <Button Content="" Width="24" Height="24" Margin="2" Background="#CD5C5C" Click="ColorButton_Click" BorderThickness="1" BorderBrush="#A34A4A"/>
+                                    <Button Content="" Width="24" Height="24" Margin="2" Background="#9370DB" Click="ColorButton_Click" BorderThickness="1" BorderBrush="#7558B0"/>
+                                    <Button Content="" Width="24" Height="24" Margin="2" Background="#FF8C00" Click="ColorButton_Click" BorderThickness="1" BorderBrush="#CC7000"/>
+                                    <Button Content="" Width="24" Height="24" Margin="2" Background="#20B2AA" Click="ColorButton_Click" BorderThickness="1" BorderBrush="#198E88"/>
+                                </WrapPanel>
 
-                    <!-- Кнопки действий -->
-                    <Button x:Name="SaveAddButton"
-                            Content="{Binding IsEditMode, Converter={StaticResource BoolToSaveAddConverter}}"
-                            Click="SaveOrAddButton_Click"
-                            Style="{StaticResource PrimaryButtonStyle}"
-                            Margin="0,0,0,8"/>
-                
-                    <!-- ═══════════════════════════════════════════════════════════ -->
-                    <!-- ИНТЕРВАЛЫ УЧАСТИЯ (только в режиме редактирования)          -->
-                    <!-- ═══════════════════════════════════════════════════════════ -->
-                    <Expander Header="Интервалы участия" 
-                              IsExpanded="False"
-                              Visibility="{Binding IsEditMode, Converter={StaticResource BoolToVisibilityConverter}}"
-                              Margin="0,8,0,8">
-                        <StackPanel>
-                            <DataGrid ItemsSource="{Binding ParticipationIntervals}"
-                                      SelectedItem="{Binding SelectedInterval}"
-                                      AutoGenerateColumns="False"
-                                      CanUserAddRows="False"
-                                      CanUserDeleteRows="False"
-                                      Height="120"
-                                      Margin="0,4,0,4">
-                                <DataGrid.Columns>
-                                    <!-- Дата начала -->
-                                    <DataGridTemplateColumn Header="С" Width="100">
-                                        <DataGridTemplateColumn.CellTemplate>
-                                            <DataTemplate>
-                                                <TextBlock Text="{Binding Start, 
-                                                    Converter={StaticResource TimeSpanDateConverter},
-                                                    StringFormat=d}"
-                                                           VerticalAlignment="Center"
-                                                           Margin="4,0"/>
-                                            </DataTemplate>
-                                        </DataGridTemplateColumn.CellTemplate>
-                                        <DataGridTemplateColumn.CellEditingTemplate>
-                                            <DataTemplate>
-                                                <DatePicker SelectedDate="{Binding Start, 
-                                                    Converter={StaticResource TimeSpanDateConverter},
-                                                    UpdateSourceTrigger=PropertyChanged}"/>
-                                            </DataTemplate>
-                                        </DataGridTemplateColumn.CellEditingTemplate>
-                                    </DataGridTemplateColumn>
-                                    
-                                    <!-- Дата окончания (nullable) -->
-                                    <DataGridTemplateColumn Header="По" Width="100">
-                                        <DataGridTemplateColumn.CellTemplate>
-                                            <DataTemplate>
-                                                <TextBlock VerticalAlignment="Center" Margin="4,0">
-                                                    <TextBlock.Text>
-                                                        <Binding Path="End" 
-                                                                 Converter="{StaticResource TimeSpanDateConverter}"
-                                                                 StringFormat="d"
-                                                                 TargetNullValue="∞"/>
-                                                    </TextBlock.Text>
-                                                </TextBlock>
-                                            </DataTemplate>
-                                        </DataGridTemplateColumn.CellTemplate>
-                                        <DataGridTemplateColumn.CellEditingTemplate>
-                                            <DataTemplate>
-                                                <DatePicker SelectedDate="{Binding End, 
-                                                    Converter={StaticResource TimeSpanDateConverter},
-                                                    UpdateSourceTrigger=PropertyChanged}"/>
-                                            </DataTemplate>
-                                        </DataGridTemplateColumn.CellEditingTemplate>
-                                    </DataGridTemplateColumn>
-                                    
-                                    <!-- MaxWorkload -->
-                                    <DataGridTextColumn Header="MaxWL%" 
-                                                        Binding="{Binding MaxWorkload}" 
-                                                        Width="60"/>
-                                </DataGrid.Columns>
-                            </DataGrid>
-                            <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
-                                <Button Content="+" Width="28" Height="28" 
-                                        Command="{Binding AddIntervalCommand}"
-                                        ToolTip="Добавить интервал"
-                                        Margin="0,0,4,0"/>
-                                <Button Content="×" Width="28" Height="28" 
-                                        Command="{Binding RemoveIntervalCommand}"
-                                        ToolTip="Удалить интервал"
-                                        Foreground="#D32F2F"/>
+                                <!-- Кнопки действий -->
+                                <Button x:Name="SaveAddButton"
+                                        Content="{Binding ResourceViewModel.IsEditMode, Converter={StaticResource BoolToSaveAddConverter}}"
+                                        Click="SaveOrAddButton_Click"
+                                        Style="{StaticResource PrimaryButtonStyle}"
+                                        Margin="0,0,0,8"/>
+                            
+                                <!-- ИНТЕРВАЛЫ УЧАСТИЯ -->
+                                <Expander Header="Интервалы участия" 
+                                          IsExpanded="False"
+                                          Visibility="{Binding ResourceViewModel.IsEditMode, Converter={StaticResource BoolToVisibilityConverter}}"
+                                          Margin="0,8,0,8">
+                                    <StackPanel>
+                                        <DataGrid ItemsSource="{Binding ResourceViewModel.ParticipationIntervals}"
+                                                  SelectedItem="{Binding ResourceViewModel.SelectedInterval}"
+                                                  AutoGenerateColumns="False"
+                                                  CanUserAddRows="False"
+                                                  CanUserDeleteRows="False"
+                                                  Height="120"
+                                                  Margin="0,4,0,4">
+                                            <DataGrid.Columns>
+                                                <DataGridTemplateColumn Header="С" Width="100">
+                                                    <DataGridTemplateColumn.CellTemplate>
+                                                        <DataTemplate>
+                                                            <TextBlock Text="{Binding Start, 
+                                                                Converter={StaticResource TimeSpanDateConverter},
+                                                                StringFormat=d}"
+                                                                       VerticalAlignment="Center"
+                                                                       Margin="4,0"/>
+                                                        </DataTemplate>
+                                                    </DataGridTemplateColumn.CellTemplate>
+                                                </DataGridTemplateColumn>
+                                                
+                                                <DataGridTemplateColumn Header="По" Width="100">
+                                                    <DataGridTemplateColumn.CellTemplate>
+                                                        <DataTemplate>
+                                                            <TextBlock VerticalAlignment="Center" Margin="4,0">
+                                                                <TextBlock.Text>
+                                                                    <Binding Path="End" 
+                                                                             Converter="{StaticResource TimeSpanDateConverter}"
+                                                                             StringFormat="d"
+                                                                             TargetNullValue="∞"/>
+                                                                </TextBlock.Text>
+                                                            </TextBlock>
+                                                        </DataTemplate>
+                                                    </DataGridTemplateColumn.CellTemplate>
+                                                </DataGridTemplateColumn>
+                                                
+                                                <DataGridTextColumn Header="MaxWL%" 
+                                                                    Binding="{Binding MaxWorkload}" 
+                                                                    Width="60"/>
+                                            </DataGrid.Columns>
+                                        </DataGrid>
+                                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                                            <Button Content="+" Width="28" Height="28" 
+                                                    Command="{Binding ResourceViewModel.AddIntervalCommand}"
+                                                    ToolTip="Добавить интервал"
+                                                    Margin="0,0,4,0"/>
+                                            <Button Content="×" Width="28" Height="28" 
+                                                    Command="{Binding ResourceViewModel.RemoveIntervalCommand}"
+                                                    ToolTip="Удалить интервал"
+                                                    Foreground="#D32F2F"/>
+                                        </StackPanel>
+                                    </StackPanel>
+                                </Expander>
+
+                                <!-- ОТСУТСТВИЯ -->
+                                <Expander Header="Отсутствия" 
+                                          IsExpanded="False"
+                                          Visibility="{Binding ResourceViewModel.IsEditMode, Converter={StaticResource BoolToVisibilityConverter}}"
+                                          Margin="0,0,0,8">
+                                    <StackPanel>
+                                        <DataGrid ItemsSource="{Binding ResourceViewModel.Absences}"
+                                                  SelectedItem="{Binding ResourceViewModel.SelectedAbsence}"
+                                                  AutoGenerateColumns="False"
+                                                  CanUserAddRows="False"
+                                                  CanUserDeleteRows="False"
+                                                  Height="120"
+                                                  Margin="0,4,0,4">
+                                            <DataGrid.Columns>
+                                                <DataGridTemplateColumn Header="С" Width="100">
+                                                    <DataGridTemplateColumn.CellTemplate>
+                                                        <DataTemplate>
+                                                            <TextBlock Text="{Binding Start, 
+                                                                Converter={StaticResource TimeSpanDateConverter},
+                                                                StringFormat=d}"
+                                                                       VerticalAlignment="Center"
+                                                                       Margin="4,0"/>
+                                                        </DataTemplate>
+                                                    </DataGridTemplateColumn.CellTemplate>
+                                                </DataGridTemplateColumn>
+                                                
+                                                <DataGridTemplateColumn Header="По" Width="100">
+                                                    <DataGridTemplateColumn.CellTemplate>
+                                                        <DataTemplate>
+                                                            <TextBlock Text="{Binding End, 
+                                                                Converter={StaticResource TimeSpanDateConverter},
+                                                                StringFormat=d}"
+                                                                       VerticalAlignment="Center"
+                                                                       Margin="4,0"/>
+                                                        </DataTemplate>
+                                                    </DataGridTemplateColumn.CellTemplate>
+                                                </DataGridTemplateColumn>
+                                                
+                                                <DataGridComboBoxColumn Header="Причина" 
+                                                                        SelectedItemBinding="{Binding Reason}"
+                                                                        Width="*">
+                                                    <DataGridComboBoxColumn.ItemsSource>
+                                                        <x:Array Type="sys:String" 
+                                                                 xmlns:sys="clr-namespace:System;assembly=mscorlib">
+                                                            <sys:String>Отпуск</sys:String>
+                                                            <sys:String>Болезнь</sys:String>
+                                                            <sys:String>Командировка</sys:String>
+                                                            <sys:String>Отгул</sys:String>
+                                                            <sys:String>Другое</sys:String>
+                                                        </x:Array>
+                                                    </DataGridComboBoxColumn.ItemsSource>
+                                                </DataGridComboBoxColumn>
+                                            </DataGrid.Columns>
+                                        </DataGrid>
+                                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                                            <Button Content="+" Width="28" Height="28" 
+                                                    Command="{Binding ResourceViewModel.AddAbsenceCommand}"
+                                                    ToolTip="Добавить отсутствие"
+                                                    Margin="0,0,4,0"/>
+                                            <Button Content="×" Width="28" Height="28" 
+                                                    Command="{Binding ResourceViewModel.RemoveAbsenceCommand}"
+                                                    ToolTip="Удалить отсутствие"
+                                                    Foreground="#D32F2F"/>
+                                        </StackPanel>
+                                    </StackPanel>
+                                </Expander>
+                            
+                                <Button Content="Редактировать"
+                                        Command="{Binding ResourceViewModel.EditResourceCommand}"
+                                        IsEnabled="{Binding ResourceViewModel.SelectedResource, Converter={StaticResource NotNullToBoolConverter}}"
+                                        Margin="0,0,0,8"/>
+
+                                <Button Content="Удалить"
+                                        Command="{Binding ResourceViewModel.DeleteResourceCommand}"
+                                        IsEnabled="{Binding ResourceViewModel.SelectedResource, Converter={StaticResource NotNullToBoolConverter}}"
+                                        Foreground="#D32F2F"
+                                        Margin="0,0,0,8"/>
+
+                                <Button Content="Отмена"
+                                        Command="{Binding ResourceViewModel.CancelEditCommand}"
+                                        Visibility="{Binding ResourceViewModel.IsEditMode, Converter={StaticResource BoolToVisibilityConverter}}"/>
                             </StackPanel>
+                        </ScrollViewer>
+                    </GroupBox>
+
+                    <!-- СТАТУС РЕСУРСОВ -->
+                    <TextBlock Grid.Row="1" Grid.Column="0" Grid.ColumnSpan="2"
+                               Text="{Binding ResourceViewModel.StatusMessage}"
+                               Foreground="{StaticResource TextSecondaryBrush}"
+                               Margin="0,8,0,0"/>
+                </Grid>
+            </TabItem>
+            
+            <!-- ВКЛАДКА: ПРОИЗВОДСТВЕННЫЙ КАЛЕНДАРЬ -->
+            <TabItem Header="Производственный календарь">
+                <Grid Margin="8">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="*"/>
+                        <RowDefinition Height="Auto"/>
+                    </Grid.RowDefinitions>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="300"/>
+                    </Grid.ColumnDefinitions>
+
+                    <!-- СПИСОК ПРАЗДНИКОВ -->
+                    <GroupBox Grid.Row="0" Grid.Column="0" 
+                              Header="Праздничные дни" 
+                              Margin="0,0,8,0">
+                        <DataGrid x:Name="HolidaysGrid"
+                                  ItemsSource="{Binding HolidayViewModel.Holidays}"
+                                  SelectedItem="{Binding HolidayViewModel.SelectedHoliday, Mode=TwoWay}"
+                                  AutoGenerateColumns="False"
+                                  CanUserAddRows="False"
+                                  CanUserDeleteRows="False"
+                                  IsReadOnly="True"
+                                  SelectionMode="Single"
+                                  SelectionUnit="FullRow"
+                                  GridLinesVisibility="Horizontal"
+                                  HorizontalGridLinesBrush="{StaticResource GridLineBrush}"
+                                  Background="{StaticResource BackgroundBrush}"
+                                  RowHeight="28"
+                                  HeadersVisibility="Column">
+                            
+                            <DataGrid.Columns>
+                                <!-- Дата -->
+                                <DataGridTextColumn Header="Дата" 
+                                                    Binding="{Binding DateDisplay}" 
+                                                    Width="150"/>
+                                
+                                <!-- День недели -->
+                                <DataGridTextColumn Header="День недели" 
+                                                    Binding="{Binding DayOfWeekDisplay}" 
+                                                    Width="120"/>
+                                
+                                <!-- Название -->
+                                <DataGridTextColumn Header="Название" 
+                                                    Binding="{Binding Name}" 
+                                                    Width="*"/>
+                            </DataGrid.Columns>
+                        </DataGrid>
+                    </GroupBox>
+
+                    <!-- ФОРМА ДОБАВЛЕНИЯ ПРАЗДНИКА -->
+                    <GroupBox Grid.Row="0" Grid.Column="1" Header="Добавить праздник">
+                        <StackPanel Margin="8">
+                            
+                            <!-- Дата -->
+                            <TextBlock Text="Дата:" Margin="0,0,0,4"/>
+                            <DatePicker SelectedDate="{Binding HolidayViewModel.NewHolidayDate}"
+                                        Margin="0,0,0,12"/>
+
+                            <!-- Название -->
+                            <TextBlock Text="Название (опционально):" Margin="0,0,0,4"/>
+                            <TextBox Text="{Binding HolidayViewModel.NewHolidayName, UpdateSourceTrigger=PropertyChanged}"
+                                     Margin="0,0,0,16"/>
+
+                            <!-- Кнопка добавления -->
+                            <Button Content="Добавить праздник"
+                                    Command="{Binding HolidayViewModel.AddHolidayCommand}"
+                                    Style="{StaticResource PrimaryButtonStyle}"
+                                    Margin="0,0,0,16"/>
+
+                            <Separator Margin="0,0,0,16"/>
+
+                            <!-- Быстрые действия -->
+                            <TextBlock Text="Быстрые действия:" 
+                                       FontWeight="SemiBold"
+                                       Margin="0,0,0,8"/>
+                            
+                            <Button Content="Добавить праздники РФ"
+                                    Command="{Binding HolidayViewModel.AddRussianHolidaysCommand}"
+                                    ToolTip="Добавляет стандартные российские праздники на текущий год"
+                                    Margin="0,0,0,8"/>
+
+                            <Button Content="Удалить выбранный"
+                                    Command="{Binding HolidayViewModel.RemoveHolidayCommand}"
+                                    IsEnabled="{Binding HolidayViewModel.SelectedHoliday, Converter={StaticResource NotNullToBoolConverter}}"
+                                    Foreground="#D32F2F"
+                                    Margin="0,0,0,8"/>
+
+                            <Button Content="Очистить все"
+                                    Command="{Binding HolidayViewModel.ClearAllHolidaysCommand}"
+                                    Foreground="#D32F2F"
+                                    ToolTip="Удаляет все праздники из календаря"/>
                         </StackPanel>
-                    </Expander>
+                    </GroupBox>
 
-                    <!-- ОТСУТСТВИЯ (только в режиме редактирования)                 -->
-                    <Expander Header="Отсутствия" 
-                              IsExpanded="False"
-                              Visibility="{Binding IsEditMode, Converter={StaticResource BoolToVisibilityConverter}}"
-                              Margin="0,0,0,8">
-                        <StackPanel>
-                            <DataGrid ItemsSource="{Binding Absences}"
-                                      SelectedItem="{Binding SelectedAbsence}"
-                                      AutoGenerateColumns="False"
-                                      CanUserAddRows="False"
-                                      CanUserDeleteRows="False"
-                                      Height="120"
-                                      Margin="0,4,0,4">
-                                <DataGrid.Columns>
-                                    <!-- Дата начала -->
-                                    <DataGridTemplateColumn Header="С" Width="100">
-                                        <DataGridTemplateColumn.CellTemplate>
-                                            <DataTemplate>
-                                                <TextBlock Text="{Binding Start, 
-                                                    Converter={StaticResource TimeSpanDateConverter},
-                                                    StringFormat=d}"
-                                                           VerticalAlignment="Center"
-                                                           Margin="4,0"/>
-                                            </DataTemplate>
-                                        </DataGridTemplateColumn.CellTemplate>
-                                        <DataGridTemplateColumn.CellEditingTemplate>
-                                            <DataTemplate>
-                                                <DatePicker SelectedDate="{Binding Start, 
-                                                    Converter={StaticResource TimeSpanDateConverter},
-                                                    UpdateSourceTrigger=PropertyChanged}"/>
-                                            </DataTemplate>
-                                        </DataGridTemplateColumn.CellEditingTemplate>
-                                    </DataGridTemplateColumn>
-                                    
-                                    <!-- Дата окончания -->
-                                    <DataGridTemplateColumn Header="По" Width="100">
-                                        <DataGridTemplateColumn.CellTemplate>
-                                            <DataTemplate>
-                                                <TextBlock Text="{Binding End, 
-                                                    Converter={StaticResource TimeSpanDateConverter},
-                                                    StringFormat=d}"
-                                                           VerticalAlignment="Center"
-                                                           Margin="4,0"/>
-                                            </DataTemplate>
-                                        </DataGridTemplateColumn.CellTemplate>
-                                        <DataGridTemplateColumn.CellEditingTemplate>
-                                            <DataTemplate>
-                                                <DatePicker SelectedDate="{Binding End, 
-                                                    Converter={StaticResource TimeSpanDateConverter},
-                                                    UpdateSourceTrigger=PropertyChanged}"/>
-                                            </DataTemplate>
-                                        </DataGridTemplateColumn.CellEditingTemplate>
-                                    </DataGridTemplateColumn>
-                                    
-                                    <!-- Причина -->
-                                    <DataGridComboBoxColumn Header="Причина" 
-                                                            SelectedItemBinding="{Binding Reason}"
-                                                            Width="*">
-                                        <DataGridComboBoxColumn.ItemsSource>
-                                            <x:Array Type="sys:String" 
-                                                     xmlns:sys="clr-namespace:System;assembly=mscorlib">
-                                                <sys:String>Отпуск</sys:String>
-                                                <sys:String>Болезнь</sys:String>
-                                                <sys:String>Командировка</sys:String>
-                                                <sys:String>Отгул</sys:String>
-                                                <sys:String>Другое</sys:String>
-                                            </x:Array>
-                                        </DataGridComboBoxColumn.ItemsSource>
-                                    </DataGridComboBoxColumn>
-                                </DataGrid.Columns>
-                            </DataGrid>
-                            <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
-                                <Button Content="+" Width="28" Height="28" 
-                                        Command="{Binding AddAbsenceCommand}"
-                                        ToolTip="Добавить отсутствие"
-                                        Margin="0,0,4,0"/>
-                                <Button Content="×" Width="28" Height="28" 
-                                        Command="{Binding RemoveAbsenceCommand}"
-                                        ToolTip="Удалить отсутствие"
-                                        Foreground="#D32F2F"/>
-                            </StackPanel>
-                        </StackPanel>
-                    </Expander>
-                
-                    <Button Content="Редактировать"
-                            Command="{Binding EditResourceCommand}"
-                            IsEnabled="{Binding SelectedResource, Converter={StaticResource NotNullToBoolConverter}}"
-                            Margin="0,0,0,8"/>
+                    <!-- СТАТУС ПРАЗДНИКОВ -->
+                    <TextBlock Grid.Row="1" Grid.Column="0" Grid.ColumnSpan="2"
+                               Text="{Binding HolidayViewModel.StatusMessage}"
+                               Foreground="{StaticResource TextSecondaryBrush}"
+                               Margin="0,8,0,0"/>
+                </Grid>
+            </TabItem>
+        </TabControl>
 
-                    <Button Content="Удалить"
-                            Command="{Binding DeleteResourceCommand}"
-                            IsEnabled="{Binding SelectedResource, Converter={StaticResource NotNullToBoolConverter}}"
-                            Foreground="#D32F2F"
-                            Margin="0,0,0,8"/>
-
-                    <Button Content="Отмена"
-                            Command="{Binding CancelEditCommand}"
-                            Visibility="{Binding IsEditMode, Converter={StaticResource BoolToVisibilityConverter}}"/>
-                </StackPanel>
-            </ScrollViewer>
-        </GroupBox>
-
-        <!-- ═══════════════════════════════════════════════════════════════ -->
-        <!-- СТАТУС                                                          -->
-        <!-- ═══════════════════════════════════════════════════════════════ -->
-        <TextBlock Grid.Row="1" Grid.Column="0" Grid.ColumnSpan="2"
-                   Text="{Binding StatusMessage}"
-                   Foreground="{StaticResource TextSecondaryBrush}"
-                   Margin="0,8,0,8"/>
-
-        <!-- ═══════════════════════════════════════════════════════════════ -->
-        <!-- КНОПКА ЗАКРЫТЬ                                                  -->
-        <!-- ═══════════════════════════════════════════════════════════════ -->
-        <StackPanel Grid.Row="2" Grid.Column="0" Grid.ColumnSpan="2"
+        <!-- КНОПКА ЗАКРЫТЬ -->
+        <StackPanel Grid.Row="1"
                     Orientation="Horizontal"
                     HorizontalAlignment="Right">
             <Button Content="Закрыть" 
