@@ -1,4 +1,5 @@
 using System.Collections.ObjectModel;
+using System.Diagnostics;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Core.Models;
@@ -77,14 +78,15 @@ public partial class HolidayViewModel : ObservableObject
     [RelayCommand]
     private void AddHoliday()
     {
-        if (NewHolidayDate < ProjectStart)
+        var projectStart = _projectManager.Start;
+        if (NewHolidayDate < projectStart)
         {
             StatusMessage = "Дата праздника не может быть раньше начала проекта";
             return;
         }
 
         // Проверяем, не существует ли уже праздник на эту дату
-        var dayOffset = (NewHolidayDate.Date - ProjectStart.Date).Days;
+        var dayOffset = (NewHolidayDate.Date - projectStart.Date).Days;
         if (_calendarService.IsHoliday(TimeSpan.FromDays(dayOffset)))
         {
             StatusMessage = "Праздник на эту дату уже существует";
@@ -93,7 +95,7 @@ public partial class HolidayViewModel : ObservableObject
 
         var holiday = _calendarService.AddHoliday(
             NewHolidayDate, 
-            ProjectStart, 
+            projectStart, 
             string.IsNullOrWhiteSpace(NewHolidayName) ? null : NewHolidayName.Trim());
 
         RefreshHolidays();
@@ -105,7 +107,7 @@ public partial class HolidayViewModel : ObservableObject
         NewHolidayName = string.Empty;
         NewHolidayDate = DateTime.Today;
 
-        StatusMessage = $"Добавлен праздник: {holiday.Name ?? holiday.GetDate(ProjectStart).ToShortDateString()}";
+        StatusMessage = $"Добавлен праздник: {holiday.Name ?? holiday.GetDate(_projectManager.Start).ToShortDateString()}";
     }
 
     /// <summary>
@@ -126,49 +128,80 @@ public partial class HolidayViewModel : ObservableObject
         StatusMessage = $"Удалён праздник: {holidayName}";
     }
 
-    /// <summary>
-    /// Команда: Добавить стандартные российские праздники.
-    /// </summary>
-    [RelayCommand]
-    private void AddRussianHolidays()
+/// <summary>
+/// Команда: Добавить стандартные российские праздники.
+/// </summary>
+[RelayCommand]
+private void AddRussianHolidays()
+{
+    // Базовый год — старт проекта (НИЖНЯЯ ГРАНИЦА)
+    var projectStart = _projectManager.Start;
+    int startYear = projectStart.Year;
+    int endYear = startYear;
+
+    // Расширяем диапазон до задач, но НЕ опускаемся ниже года проекта
+    if (_projectManager.Tasks.Any())
     {
-        var year = ProjectStart.Year;
-        var russianHolidays = new List<(DateTime Date, string Name)>
-        {
-            (new DateTime(year, 1, 1), "Новый год"),
-            (new DateTime(year, 1, 2), "Новогодние каникулы"),
-            (new DateTime(year, 1, 3), "Новогодние каникулы"),
-            (new DateTime(year, 1, 4), "Новогодние каникулы"),
-            (new DateTime(year, 1, 5), "Новогодние каникулы"),
-            (new DateTime(year, 1, 6), "Новогодние каникулы"),
-            (new DateTime(year, 1, 7), "Рождество Христово"),
-            (new DateTime(year, 1, 8), "Новогодние каникулы"),
-            (new DateTime(year, 2, 23), "День защитника Отечества"),
-            (new DateTime(year, 3, 8), "Международный женский день"),
-            (new DateTime(year, 5, 1), "Праздник Весны и Труда"),
-            (new DateTime(year, 5, 9), "День Победы"),
-            (new DateTime(year, 6, 12), "День России"),
-            (new DateTime(year, 11, 4), "День народного единства"),
-        };
+        var taskYears = _projectManager.Tasks
+            .Select(t => (projectStart + t.Start).Year)
+            .Concat(_projectManager.Tasks.Select(t => (projectStart + t.End).Year))
+            .Distinct();
 
-        int addedCount = 0;
-        foreach (var (date, name) in russianHolidays)
+        var enumerable = taskYears.ToList();
+        if (enumerable.Count != 0)
         {
-            // Проверяем, что дата в пределах проекта и праздник ещё не добавлен
-            if (date >= ProjectStart)
-            {
-                var dayOffset = (date.Date - ProjectStart.Date).Days;
-                if (!_calendarService.IsHoliday(TimeSpan.FromDays(dayOffset)))
-                {
-                    _calendarService.AddHoliday(date, ProjectStart, name);
-                    addedCount++;
-                }
-            }
+            // Гарантируем: не раньше года старта проекта
+            startYear = Math.Max(startYear, enumerable.Min());
+            endYear = Math.Max(endYear, enumerable.Max());
         }
-
-        RefreshHolidays();
-        StatusMessage = $"Добавлено праздников: {addedCount}";
     }
+
+    // Базовый список праздников (шаблон: год не важен)
+    var russianHolidays = new List<(DateTime Date, string Name)>
+    {
+        (new DateTime(2000, 1, 1), "Новый год"),
+        (new DateTime(2000, 1, 2), "Новогодние каникулы"),
+        (new DateTime(2000, 1, 3), "Новогодние каникулы"),
+        (new DateTime(2000, 1, 4), "Новогодние каникулы"),
+        (new DateTime(2000, 1, 5), "Новогодние каникулы"),
+        (new DateTime(2000, 1, 6), "Новогодние каникулы"),
+        (new DateTime(2000, 1, 7), "Рождество Христово"),
+        (new DateTime(2000, 1, 8), "Новогодние каникулы"),
+        (new DateTime(2000, 2, 23), "День защитника Отечества"),
+        (new DateTime(2000, 3, 8), "Международный женский день"),
+        (new DateTime(2000, 5, 1), "Праздник Весны и Труда"),
+        (new DateTime(2000, 5, 9), "День Победы"),
+        (new DateTime(2000, 6, 12), "День России"),
+        (new DateTime(2000, 11, 4), "День народного единства"),
+    };
+
+    int addedCount = 0;
+
+    // Добавляем праздники для каждого года в диапазоне
+    for (int year = startYear; year <= endYear; year++)
+    {
+        foreach (var (baseDate, name) in russianHolidays)
+        {
+            var date = new DateTime(year, baseDate.Month, baseDate.Day);
+
+            // НЕ добавляем праздники, которые датированы раньше реальной даты старта проекта
+            if (date.Date < projectStart.Date) continue;
+
+            // Проверяем только на дубликаты (используем projectStart для согласованности)
+            if (_calendarService.IsHoliday(date, projectStart)) continue;
+            
+            // Пропустить, если праздник попадает на выходной
+            if (date.DayOfWeek is DayOfWeek.Saturday or DayOfWeek.Sunday) continue;
+
+            _calendarService.AddHoliday(date, projectStart, name);
+            addedCount++;
+        }
+    }
+
+    RefreshHolidays();
+    StatusMessage = $"Добавлено праздников: {addedCount}";
+}
+
 
     /// <summary>
     /// Команда: Очистить все праздники.

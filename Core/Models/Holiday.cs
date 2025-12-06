@@ -55,7 +55,6 @@ public class Holiday
     public static Holiday FromDate(DateTime date, DateTime projectStart, string? name = null)
     {
         var dayOffset = (date.Date - projectStart.Date).Days;
-        System.Diagnostics.Debug.WriteLine($"FromDate: {date:yyyy-MM-dd} - {projectStart:yyyy-MM-dd} = {dayOffset} дней");
         return new Holiday(TimeSpan.FromDays(dayOffset), name);
     }
 
