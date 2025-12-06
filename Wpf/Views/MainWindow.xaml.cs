@@ -1,6 +1,8 @@
 ﻿using System.ComponentModel;
 using System.Windows;
+using System.Windows.Controls;
 using System.Windows.Input;
+using System.Windows.Media;
 using Microsoft.Win32;
 using Wpf.Controls;
 using Wpf.Services.Export;
@@ -14,6 +16,8 @@ namespace Wpf.Views;
 public partial class MainWindow : Window
 {
     private MainViewModel? ViewModel => DataContext as MainViewModel;
+    private ScrollViewer? _dataGridScrollViewer;
+    private bool _isSyncingScroll;
 
     public MainWindow()
     {
@@ -117,15 +121,61 @@ public partial class MainWindow : Window
         ViewModel?.LoadLastOpenedFile();
         if (DataContext is MainViewModel vm)
         {
-            // Связываем callbacks
             vm.ExportToPdfAction = ExportDocument;
             vm.EditNoteAction = GanttChart.EditNote;
         }
-        
-        // Синхронизация скролла
-        GanttChart.HorizontalScrollChanged += (_, offset) =>
+
+        // ═══════════════════════════════════════════════════════════════
+        // Двусторонняя синхронизация горизонтального скролла
+        // ═══════════════════════════════════════════════════════════════
+
+        // EngagementStrip → GanttChart
+        EngagementStrip.HorizontalScrollChanged += (_, offset) => { GanttChart.SetHorizontalOffset(offset); };
+
+        // GanttChart → EngagementStrip
+        GanttChart.HorizontalScrollChanged += (_, offset) => { EngagementStrip.HorizontalOffset = offset; };
+
+        // ═══════════════════════════════════════════════════════════════
+        // Синхронизация вертикального скролла (EngagementStrip → панель имён)
+        // ═══════════════════════════════════════════════════════════════
+        EngagementStrip.VerticalScrollChanged += (_, offset) =>
         {
-            EngagementStrip.HorizontalOffset = offset;
+            ResourceNamesScrollViewer.ScrollToVerticalOffset(offset);
+        };
+
+        // ═══════════════════════════════════════════════════════════════
+        // Синхронизация вертикального скролла (GanttChart ↔ TasksDataGrid)
+        // ═══════════════════════════════════════════════════════════════
+
+        // Находим ScrollViewer внутри DataGrid (после загрузки визуального дерева)
+        Dispatcher.BeginInvoke(new Action(() =>
+        {
+            _dataGridScrollViewer = FindScrollViewer(TasksDataGrid);
+
+            if (_dataGridScrollViewer != null)
+            {
+                // DataGrid → GanttChart
+                _dataGridScrollViewer.ScrollChanged += (_, args) =>
+                {
+                    if (!_isSyncingScroll && args.VerticalChange != 0)
+                    {
+                        _isSyncingScroll = true;
+                        GanttChart.SetVerticalOffset(args.VerticalOffset);
+                        _isSyncingScroll = false;
+                    }
+                };
+            }
+        }), System.Windows.Threading.DispatcherPriority.Loaded);
+
+        // GanttChart → DataGrid
+        GanttChart.VerticalScrollChanged += (_, offset) =>
+        {
+            if (!_isSyncingScroll && _dataGridScrollViewer != null)
+            {
+                _isSyncingScroll = true;
+                _dataGridScrollViewer.ScrollToVerticalOffset(offset);
+                _isSyncingScroll = false;
+            }
         };
     }
 
@@ -164,6 +214,25 @@ public partial class MainWindow : Window
                 ViewModel.SaveProjectCommand.Execute(null);
             }
         }
+    }
+    
+    /// <summary>
+    /// Находит ScrollViewer внутри DataGrid.
+    /// </summary>
+    private static ScrollViewer? FindScrollViewer(DependencyObject parent)
+    {
+        for (int i = 0; i < VisualTreeHelper.GetChildrenCount(parent); i++)
+        {
+            var child = VisualTreeHelper.GetChild(parent, i);
+        
+            if (child is ScrollViewer scrollViewer)
+                return scrollViewer;
+        
+            var result = FindScrollViewer(child);
+            if (result != null)
+                return result;
+        }
+        return null;
     }
 
     #region Document Export

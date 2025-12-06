@@ -81,6 +81,16 @@ public partial class ResourceEngagementStrip : UserControl
     #region Events
 
     public event EventHandler<Resource>? ResourceDoubleClicked;
+    
+    /// <summary>
+    /// Событие изменения горизонтального скролла (для синхронизации с GanttChart).
+    /// </summary>
+    public event EventHandler<double>? HorizontalScrollChanged;
+    
+    /// <summary>
+    /// Событие изменения вертикального скролла (для синхронизации с внешней панелью имён).
+    /// </summary>
+    public event EventHandler<double>? VerticalScrollChanged;
 
     #endregion
 
@@ -96,12 +106,26 @@ public partial class ResourceEngagementStrip : UserControl
     private bool _isUpdatingScroll;
     private ResourceService? _subscribedResourceService;
     private ProjectManager? _subscribedProjectManager;
+    
+    private System.Windows.Threading.DispatcherTimer? _zoomDebounceTimer;
+    private const int ZoomDebounceMs = 50;
 
     #endregion
 
     public ResourceEngagementStrip()
     {
         InitializeComponent();
+        
+        _zoomDebounceTimer = new System.Windows.Threading.DispatcherTimer
+        {
+            Interval = TimeSpan.FromMilliseconds(ZoomDebounceMs)
+        };
+        _zoomDebounceTimer.Tick += (_, _) =>
+        {
+            _zoomDebounceTimer.Stop();
+            Refresh();
+        };
+        
         Loaded += OnLoaded;
         Unloaded += OnUnloaded;
         SizeChanged += OnSizeChanged;
@@ -166,7 +190,9 @@ public partial class ResourceEngagementStrip : UserControl
     {
         if (d is ResourceEngagementStrip strip)
         {
-            strip.Dispatcher.BeginInvoke(strip.Refresh, System.Windows.Threading.DispatcherPriority.Render);
+            // Debounce для плавного зума
+            strip._zoomDebounceTimer?.Stop();
+            strip._zoomDebounceTimer?.Start();
         }
     }
 
@@ -182,13 +208,27 @@ public partial class ResourceEngagementStrip : UserControl
 
     private void TimelineScrollViewer_ScrollChanged(object sender, ScrollChangedEventArgs e)
     {
-        if (!_isUpdatingScroll && e.HorizontalChange != 0)
+        if (!_isUpdatingScroll)
         {
             _isUpdatingScroll = true;
-            HorizontalOffset = e.HorizontalOffset;
+        
+            // Горизонтальная синхронизация
+            if (e.HorizontalChange != 0)
+            {
+                HorizontalOffset = e.HorizontalOffset;
+                HorizontalScrollChanged?.Invoke(this, e.HorizontalOffset);
+            }
+        
+            // Вертикальная синхронизация
+            if (e.VerticalChange != 0)
+            {
+                VerticalScrollChanged?.Invoke(this, e.VerticalOffset);
+            }
+        
             _isUpdatingScroll = false;
         }
 
+        // Внутренняя синхронизация имён (если ShowResourceNames=true)
         NamesScrollViewer.ScrollToVerticalOffset(e.VerticalOffset);
     }
 
@@ -503,41 +543,32 @@ public partial class ResourceEngagementStrip : UserControl
             DayState.Absence => new SolidColorBrush(Color.FromRgb(189, 189, 189)),
             DayState.NotParticipating => new SolidColorBrush(Color.FromRgb(238, 238, 238)),
             DayState.Weekend => new SolidColorBrush(Color.FromRgb(253, 248, 223)), // #EDE0D0 — как в GridRenderer
-            DayState.PartialAssigned => CreatePartialBrush(colorHex, allocation, maxWorkload),
-            DayState.Assigned => CreateColorBrush(colorHex, 1.0),
-            DayState.Overbooked => CreateColorBrush(colorHex, 1.0),
+            DayState.PartialAssigned => CreatePartialBrush(allocation, maxWorkload),
+            DayState.Assigned => AssignedBlueBrush,
+            DayState.Overbooked => AssignedBlueBrush,
             _ => Brushes.White
         };
     }
 
-    private static Brush CreatePartialBrush(string colorHex, int allocation, int maxWorkload)
+    private static Brush CreatePartialBrush(int allocation, int maxWorkload)
     {
+        // Вычисляем прозрачность (от 30% до 100%)
         var opacity = maxWorkload > 0 
             ? Math.Min(1.0, 0.3 + 0.7 * allocation / maxWorkload) 
             : 0.3;
-        return CreateColorBrush(colorHex, opacity);
+    
+        // Создаем кисть с тем же цветом, что и AssignedBlueBrush
+        return new SolidColorBrush(Color.FromArgb(
+            (byte)(255 * opacity), 
+            AssignedBlueBrush.Color.R, 
+            AssignedBlueBrush.Color.G, 
+            AssignedBlueBrush.Color.B));
     }
 
-    private static SolidColorBrush CreateColorBrush(string hex, double opacity)
-    {
-        try
-        {
-            if (hex.StartsWith("#"))
-                hex = hex.Substring(1);
-
-            var color = Color.FromRgb(
-                Convert.ToByte(hex.Substring(0, 2), 16),
-                Convert.ToByte(hex.Substring(2, 2), 16),
-                Convert.ToByte(hex.Substring(4, 2), 16));
-            
-            color.A = (byte)(255 * opacity);
-            return new SolidColorBrush(color);
-        }
-        catch
-        {
-            return new SolidColorBrush(Color.FromArgb((byte)(255 * opacity), 70, 130, 180));
-        }
-    }
+    
+    // Добавьте статическое поле для кисти (вне методов, внутри класса)
+    private static readonly SolidColorBrush AssignedBlueBrush = new SolidColorBrush(Color.FromRgb(70, 130, 180)); // SteelBlue
+    
 
     private static DrawingBrush CreateHatchBrush()
     {

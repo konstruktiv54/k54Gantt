@@ -1,5 +1,6 @@
 ﻿using System.Windows;
 using Core.Services;
+using Core.Services.UndoRedo;
 using Microsoft.Extensions.DependencyInjection;
 using Wpf.Services;
 using Wpf.ViewModels;
@@ -47,8 +48,10 @@ public partial class App : Application
         services.AddSingleton<EngagementCalculationService>();
         services.AddSingleton<AutoSaveManager>();
         services.AddSingleton<TaskCopyService>();
+        services.AddSingleton<UndoRedoService>();
 
         // ViewModels
+        services.AddSingleton<MainViewModel>();
         services.AddTransient<MainViewModel>();
     }
 }

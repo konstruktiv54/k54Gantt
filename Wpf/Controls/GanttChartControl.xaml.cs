@@ -11,6 +11,9 @@ using Wpf.Services;
 using Wpf.Services.Export;
 using Wpf.Views;
 using Task = Core.Interfaces.Task;
+using Core.Services.UndoRedo;
+using Core.Services.UndoRedo.Commands.Scheduling;
+using Core.Services.UndoRedo.Commands.Hierarchy;
 
 
 namespace Wpf.Controls;
@@ -28,10 +31,11 @@ public partial class GanttChartControl : UserControl
     private readonly TaskRenderer _taskRenderer;
 
     private bool _isRendering;
+    private System.Windows.Threading.DispatcherTimer? _zoomDebounceTimer;
+    private const int ZoomDebounceMs = 50;
     
     // Drag & Drop — НЕ readonly, чтобы можно было сбрасывать
     private DragState? _dragState;
-    private const double EdgeZoneWidth = 8.0;
     private const double MinDurationDays = 1.0;
     private const double PixelsPerProgressPercent = 3.0;
     private const double DeadlineGrabZone = 8.0;
@@ -59,6 +63,22 @@ public partial class GanttChartControl : UserControl
 
     #region Dependency Properties
 
+    /// <summary>
+    /// Сервис Undo/Redo для записи операций.
+    /// </summary>
+    public static readonly DependencyProperty UndoRedoServiceProperty =
+        DependencyProperty.Register(
+            nameof(UndoRedoService),
+            typeof(UndoRedoService),
+            typeof(GanttChartControl),
+            new PropertyMetadata(null));
+
+    public UndoRedoService? UndoRedoService
+    {
+        get => (UndoRedoService?)GetValue(UndoRedoServiceProperty);
+        set => SetValue(UndoRedoServiceProperty, value);
+    }
+    
     /// <summary>
     /// Сервис ресурсов для отображения инициалов.
     /// </summary>
@@ -294,6 +314,11 @@ public partial class GanttChartControl : UserControl
     /// Событие модификации задачи (для обновления UI).
     /// </summary>
     public event EventHandler<TaskDragEventArgs>? TaskModified;
+    
+    /// <summary>
+    /// Событие изменения вертикального скролла (для синхронизации с Sidebar).
+    /// </summary>
+    public event EventHandler<double>? VerticalScrollChanged;
 
     #endregion
 
@@ -302,6 +327,17 @@ public partial class GanttChartControl : UserControl
     public GanttChartControl()
     {
         InitializeComponent();
+        
+        // Таймер debounce для плавного зума
+        _zoomDebounceTimer = new System.Windows.Threading.DispatcherTimer
+        {
+            Interval = TimeSpan.FromMilliseconds(ZoomDebounceMs)
+        };
+        _zoomDebounceTimer.Tick += (_, _) =>
+        {
+            _zoomDebounceTimer.Stop();
+            InvalidateChart();
+        };
 
         // Инициализация рендереров
         _gridRenderer = new GridRenderer(this);
@@ -349,8 +385,12 @@ public partial class GanttChartControl : UserControl
     {
         if (d is GanttChartControl control)
         {
-            var baseWidth = 30.0; // ДОЛЖНО БЫТЬ 30.0 как в MainViewModel
+            var baseWidth = 30.0;
             control.ColumnWidth = baseWidth * control.ZoomLevel / 100.0;
+        
+            // Debounce: перерисовка только после паузы в скролле
+            control._zoomDebounceTimer?.Stop();
+            control._zoomDebounceTimer?.Start();
         }
     }
 
@@ -379,8 +419,18 @@ public partial class GanttChartControl : UserControl
 
     private void OnChartScrollChanged(object sender, ScrollChangedEventArgs e)
     {
+        // Горизонтальная синхронизация (заголовок + EngagementStrip)
         HeaderScrollViewer.ScrollToHorizontalOffset(e.HorizontalOffset);
-        HorizontalScrollChanged?.Invoke(this, e.HorizontalOffset);
+        if (e.HorizontalChange != 0)
+        {
+            HorizontalScrollChanged?.Invoke(this, e.HorizontalOffset);
+        }
+    
+        // Вертикальная синхронизация (Sidebar)
+        if (e.VerticalChange != 0)
+        {
+            VerticalScrollChanged?.Invoke(this, e.VerticalOffset);
+        }
     }
     
     private void OnPreviewMouseWheel(object sender, MouseWheelEventArgs e)
@@ -732,8 +782,25 @@ public partial class GanttChartControl : UserControl
     }
 
     #endregion
-
+    
+    /// <summary>
+    /// Устанавливает вертикальный offset скролла (для синхронизации с Sidebar).
+    /// </summary>
+    public void SetVerticalOffset(double offset)
+    {
+        ChartScrollViewer.ScrollToVerticalOffset(offset);
+    }
+    
     #region Public Methods
+    
+    /// <summary>
+    /// Устанавливает горизонтальный offset скролла (для синхронизации с EngagementStrip).
+    /// </summary>
+    public void SetHorizontalOffset(double offset)
+    {
+        ChartScrollViewer.ScrollToHorizontalOffset(offset);
+        // HeaderScrollViewer синхронизируется автоматически через OnChartScrollChanged
+    }
     
     /// <summary>
     /// Перерисовывает всю диаграмму.
@@ -1342,6 +1409,9 @@ public partial class GanttChartControl : UserControl
 
         var task = _dragState.Task;
 
+        // Записываем команду для Undo/Redo
+        RecordProgressCommand(task);
+
         var args = new TaskDragEventArgs(
             task,
             DragOperation.ProgressAdjusting,
@@ -1851,6 +1921,9 @@ public partial class GanttChartControl : UserControl
         var task = _dragState.Task;
         var operation = _dragState.Operation;
 
+        // ═══════════════════════════════════════════════════════════════════
+        // Обработка операций + запись в Undo/Redo
+        // ═══════════════════════════════════════════════════════════════════
         switch (operation)
         {
             case DragOperation.Reordering:
@@ -1863,20 +1936,44 @@ public partial class GanttChartControl : UserControl
 
                     if (targetIndex != _dragState.OriginalIndex)
                     {
-                        MoveTaskToIndex(task, _dragState.OriginalIndex, targetIndex);
+                        var offset = targetIndex - _dragState.OriginalIndex;
+
+                        if (UndoRedoService != null)
+                        {
+                            // Создаём команду и выполняем через сервис
+                            var command = new MoveCommand(ProjectManager, task, offset);
+                            UndoRedoService.Execute(command);
+                        }
+                        else
+                        {
+                            // Fallback без Undo/Redo
+                            MoveTaskToIndex(task, _dragState.OriginalIndex, targetIndex);
+                        }
                     }
                 }
+
                 break;
             }
-            
+
             case DragOperation.DeadlineMoving:
-                StatusMessage = $"Дедлайн '{_dragState.Task.Name}': {_dragState.Task.Deadline?.Days} дн.";
+                // TODO: SetDeadlineCommand
+                StatusMessage = $"Дедлайн '{task.Name}': {task.Deadline?.Days} дн.";
                 break;
 
-            default:
+            case DragOperation.Moving:
+            case DragOperation.ResizingStart:
+            case DragOperation.ResizingEnd:
+                RecordSchedulingCommand(task, operation);
+                break;
+
+            case DragOperation.ProgressAdjusting:
+                RecordProgressCommand(task);
                 break;
         }
 
+        // ═══════════════════════════════════════════════════════════════════
+        // Генерируем событие
+        // ═══════════════════════════════════════════════════════════════════
         var args = new TaskDragEventArgs(
             task,
             operation,
@@ -1893,6 +1990,89 @@ public partial class GanttChartControl : UserControl
 
         TaskDragged?.Invoke(this, args);
     }
+    
+    /// <summary>
+    /// Записывает команду изменения расписания в историю Undo/Redo.
+    /// Вызывается при завершении drag-операций Moving, ResizingStart, ResizingEnd.
+    /// </summary>
+    private void RecordSchedulingCommand(Task task, DragOperation operation)
+    {
+        if (UndoRedoService == null || _dragState == null || ProjectManager == null) 
+            return;
+
+        // Проверяем, было ли реальное изменение
+        var startChanged = task.Start != _dragState.OriginalStart;
+        var endChanged = task.End != _dragState.OriginalEnd;
+
+        if (!startChanged && !endChanged) 
+            return;
+
+        switch (operation)
+        {
+            case DragOperation.Moving:
+                if (startChanged)
+                {
+                    var command = new SetStartCommand(
+                        ProjectManager,
+                        task,
+                        _dragState.OriginalStart,
+                        task.Start);
+                
+                    // execute: false — изменение уже применено во время drag
+                    UndoRedoService.Execute(command, execute: false);
+                }
+                break;
+
+            case DragOperation.ResizingStart:
+                if (startChanged)
+                {
+                    var command = new SetStartCommand(
+                        ProjectManager,
+                        task,
+                        _dragState.OriginalStart,
+                        task.Start);
+                
+                    UndoRedoService.Execute(command, execute: false);
+                }
+                break;
+
+            case DragOperation.ResizingEnd:
+                if (endChanged)
+                {
+                    var command = new SetEndCommand(
+                        ProjectManager,
+                        task,
+                        _dragState.OriginalEnd,
+                        task.End);
+                
+                    UndoRedoService.Execute(command, execute: false);
+                }
+                break;
+        }
+    }
+    
+    /// <summary>
+    /// Записывает команду изменения прогресса в историю Undo/Redo.
+    /// </summary>
+    private void RecordProgressCommand(Task task)
+    {
+        if (UndoRedoService == null || _dragState == null || ProjectManager == null) 
+            return;
+
+        // Проверяем, было ли реальное изменение
+        if (Math.Abs(task.Complete - _dragState.OriginalComplete) < 0.001f) 
+            return;
+
+        var command = new SetCompleteCommand(
+            ProjectManager,
+            task,
+            _dragState.OriginalComplete,
+            task.Complete);
+    
+        // execute: false — изменение уже применено
+        UndoRedoService.Execute(command, execute: false);
+    }
+
 
     /// <summary>
     /// Перемещает задачу на указанный индекс.

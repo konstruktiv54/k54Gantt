@@ -86,11 +86,11 @@ public static class DayStateExtensions
     {
         return state switch
         {
-            DayState.Weekend => 1,          // Наивысший приоритет — выходные перекрывают всё
-            DayState.Overbooked => 2,
-            DayState.Assigned => 3,
-            DayState.PartialAssigned => 4,
-            DayState.Absence => 5,
+            DayState.Weekend => 1,          // Наивысший — выходные
+            DayState.Absence => 2,          // Второй — отсутствие (отпуск, больничный)
+            DayState.Overbooked => 3,
+            DayState.Assigned => 4,
+            DayState.PartialAssigned => 5,
             DayState.NotParticipating => 6,
             DayState.Free => 7,             // Низший приоритет
             _ => 7

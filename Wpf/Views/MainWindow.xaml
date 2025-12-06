@@ -40,6 +40,9 @@
         <KeyBinding Key="C" Modifiers="Ctrl" Command="{Binding CopyTaskCommand}" />
         <KeyBinding Key="V" Modifiers="Ctrl" Command="{Binding PasteTaskCommand}" />
         <KeyBinding Key="F2" Command="{Binding EditNoteCommand}"/>
+        <KeyBinding Key="Z" Modifiers="Ctrl" Command="{Binding UndoCommand}" />
+        <KeyBinding Key="Y" Modifiers="Ctrl" Command="{Binding RedoCommand}" />
+        <KeyBinding Key="Z" Modifiers="Ctrl+Shift" Command="{Binding RedoCommand}" />
     </Window.InputBindings>
 
     <!-- ═══════════════════════════════════════════════════════════════ -->
@@ -149,6 +152,37 @@
             
             <!-- Edit Menu -->
             <MenuItem Header="_Правка">
+                <!-- Undo -->
+                <MenuItem Header="_Отменить" 
+                          Command="{Binding UndoCommand}"
+                          InputGestureText="Ctrl+Z">
+                    <MenuItem.Icon>
+                        <materialDesign:PackIcon Kind="Undo" />
+                    </MenuItem.Icon>
+                    <MenuItem.ToolTip>
+                        <TextBlock>
+                            <Run Text="Отменить: "/>
+                            <Run Text="{Binding UndoDescription, FallbackValue='(нет действий)'}" />
+                        </TextBlock>
+                    </MenuItem.ToolTip>
+                </MenuItem>
+    
+                <!-- Redo -->
+                <MenuItem Header="По_вторить" 
+                          Command="{Binding RedoCommand}"
+                          InputGestureText="Ctrl+Y">
+                    <MenuItem.Icon>
+                        <materialDesign:PackIcon Kind="Redo" />
+                    </MenuItem.Icon>
+                    <MenuItem.ToolTip>
+                        <TextBlock>
+                            <Run Text="Повторить: "/>
+                            <Run Text="{Binding RedoDescription, FallbackValue='(нет действий)'}" />
+                        </TextBlock>
+                    </MenuItem.ToolTip>
+                </MenuItem>
+    
+                <Separator />
                 <MenuItem Header="Добавить задачу" 
                           Command="{Binding AddTaskCommand}"
                           InputGestureText="Ctrl+T"/>
@@ -237,6 +271,17 @@
                                Margin="0"/>
                 </StackPanel>
             </StatusBarItem>
+            
+            <Separator />
+    
+            <StatusBarItem>
+                <StackPanel Orientation="Horizontal">
+                    <TextBlock Text="Undo: " Foreground="Gray" />
+                    <TextBlock Text="{Binding UndoRedoService.UndoCount}" />
+                    <TextBlock Text=" | Redo: " Foreground="Gray" />
+                    <TextBlock Text="{Binding UndoRedoService.RedoCount}" />
+                </StackPanel>
+            </StatusBarItem>
         </StatusBar>
 
 <!-- ═══════════════════════════════════════════════════════════════ -->
@@ -246,7 +291,9 @@
             <Grid.RowDefinitions>
                 <RowDefinition Height="*"/>
                 <RowDefinition Height="Auto"/>
-                <RowDefinition Height="150" MinHeight="80" MaxHeight="500"/>
+                <RowDefinition Height="100" MinHeight="24" 
+                               MaxHeight="{Binding DataContext.EngagementStripMaxHeight, 
+                               RelativeSource={RelativeSource AncestorType=Window}}"/>
             </Grid.RowDefinitions>
             
             <Grid.ColumnDefinitions>
@@ -261,44 +308,25 @@
             <Border Grid.Row="0" Grid.Column="0"
                     Background="{StaticResource SidebarBackgroundBrush}"
                     BorderBrush="{StaticResource GridLineBrush}"
-                    BorderThickness="0,0,0,1">
-                <DockPanel>
-                    <!-- Toolbar -->
-                    <ToolBar DockPanel.Dock="Top" Style="{StaticResource SidebarToolbarStyle}">
-                        <Button Command="{Binding AddTaskCommand}" ToolTip="Добавить задачу (Ctrl+T)">
-                            <icon:MaterialIcon Kind="Plus" Width="18" Height="18"/>
-                        </Button>
-                        <Button Command="{Binding AddSubtaskCommand}" ToolTip="Добавить подзадачу (Ctrl+Shift+T)">
-                            <icon:MaterialIcon Kind="SubdirectoryArrowRight" Width="18" Height="18"/>
-                        </Button>
-                        <Separator/>
-                        <Button Command="{Binding MakeGroupCommand}" ToolTip="Создать группу (Ctrl+G)">
-                            <icon:MaterialIcon Kind="FolderPlus" Width="18" Height="18"/>
-                        </Button>
-                        <Button Command="{Binding UngroupCommand}" ToolTip="Разгруппировать (Ctrl+Shift+G)">
-                            <icon:MaterialIcon Kind="FolderRemove" Width="18" Height="18"/>
-                        </Button>
-                        <Separator/>
-                        <Button Command="{Binding DeleteTaskCommand}" ToolTip="Удалить (Delete)">
-                            <icon:MaterialIcon Kind="Delete" Width="18" Height="18" Foreground="#D32F2F"/>
-                        </Button>
-                    </ToolBar>
-
-                    <!-- DataGrid с задачами -->
-                    <DataGrid x:Name="TasksDataGrid"
-                              ItemsSource="{Binding FlatTasks}"
-                              SelectedItem="{Binding SelectedTaskItem, Mode=TwoWay}"
-                              AutoGenerateColumns="False"
-                              CanUserAddRows="False"
-                              CanUserDeleteRows="False"
-                              SelectionMode="Single"
-                              SelectionUnit="FullRow"
-                              GridLinesVisibility="Horizontal"
-                              HorizontalGridLinesBrush="{StaticResource GridLineBrush}"
-                              Background="{StaticResource SidebarBackgroundBrush}"
-                              RowHeight="28"
-                              HeadersVisibility="Column"
-                              ContextMenu="{StaticResource TaskContextMenu}">
+                    BorderThickness="0">
+    
+                <!-- DataGrid с задачами -->
+                <DataGrid x:Name="TasksDataGrid"
+                          ItemsSource="{Binding FlatTasks}"
+                          SelectedItem="{Binding SelectedTaskItem, Mode=TwoWay}"
+                          AutoGenerateColumns="False"
+                          CanUserAddRows="False"
+                          CanUserDeleteRows="False"
+                          SelectionMode="Single"
+                          SelectionUnit="FullRow"
+                          GridLinesVisibility="Horizontal"
+                          HorizontalGridLinesBrush="{StaticResource GridLineBrush}"
+                          Background="{StaticResource SidebarBackgroundBrush}"
+                          RowHeight="28"
+                          ColumnHeaderHeight="50"
+                          HeadersVisibility="Column"
+                          VirtualizingPanel.ScrollUnit="Pixel"
+                          ContextMenu="{StaticResource TaskContextMenu}">
                         <DataGrid.Columns>
                             <!-- ═══════════════════════════════════════════════════════════ -->
                             <!-- Имя задачи с отступом по уровню                             -->
@@ -462,7 +490,6 @@
                             </DataGridTemplateColumn>
                         </DataGrid.Columns>
                     </DataGrid>
-                </DockPanel>
             </Border>
 
             <!-- ═══════════════════════════════════════════════════════════ -->
@@ -481,12 +508,17 @@
 
                 <controls:GanttChartControl
                     x:Name="GanttChart"
+                    Tag="{Binding}"
                     ProjectManager="{Binding ProjectManager}"
-                    ZoomLevel="{Binding ZoomLevel, Mode=TwoWay}"
-                    SelectedTask="{Binding SelectedTask, Mode=TwoWay}"
                     ResourceService="{Binding ResourceService}"
-                    TaskDoubleClicked="GanttChart_TaskDoubleClicked"
-                    Tag="{Binding}">
+                    UndoRedoService="{Binding UndoRedoService}"
+                    SelectedTask="{Binding SelectedTask, Mode=TwoWay}"
+                    ZoomLevel="{Binding ZoomLevel, Mode=TwoWay}"
+                    ColumnWidth="{Binding ColumnWidth}"
+                    ShowRelations="True"
+                    ShowTodayLine="True"
+                    HighlightWeekends="True"
+                    TaskDoubleClicked="GanttChart_TaskDoubleClicked">
                     <controls:GanttChartControl.ContextMenu>
                         <ContextMenu DataContext="{Binding PlacementTarget.Tag, RelativeSource={RelativeSource Self}}">
                             <MenuItem Header="Добавить задачу" Command="{Binding AddTaskCommand}"/>

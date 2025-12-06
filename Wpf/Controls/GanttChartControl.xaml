@@ -41,7 +41,7 @@
         <!-- ═══════════════════════════════════════════════════════════════ -->
         <ScrollViewer x:Name="ChartScrollViewer"
                       Grid.Row="1"
-                      HorizontalScrollBarVisibility="Auto"
+                      HorizontalScrollBarVisibility="Hidden"
                       VerticalScrollBarVisibility="Auto"
                       CanContentScroll="True"
                       ScrollChanged="OnChartScrollChanged">
