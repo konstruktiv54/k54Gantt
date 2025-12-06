@@ -63,7 +63,7 @@ public partial class MainViewModel : ObservableObject
     /// Максимальная высота ResourceEngagementStrip (по количеству ресурсов).
     /// </summary>
     public double EngagementStripMaxHeight => 
-        Math.Max(24, (_resourceService?.Resources.Count() ?? 0) * 24);
+        Math.Max(24, (_resourceService?.Resources.Count ?? 0) * 24);
     
     // Для ресурсов (прокси к ResourceService)
     public IEnumerable<Resource> Resources => ResourceService?.Resources ?? Enumerable.Empty<Resource>();

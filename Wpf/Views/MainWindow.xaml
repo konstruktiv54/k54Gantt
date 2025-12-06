@@ -291,7 +291,9 @@
             <Grid.RowDefinitions>
                 <RowDefinition Height="*"/>
                 <RowDefinition Height="Auto"/>
-                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="100" MinHeight="24" 
+                               MaxHeight="{Binding DataContext.EngagementStripMaxHeight, 
+                               RelativeSource={RelativeSource AncestorType=Window}}"/>
             </Grid.RowDefinitions>
             
             <Grid.ColumnDefinitions>
@@ -306,8 +308,7 @@
             <Border Grid.Row="0" Grid.Column="0"
                     Background="{StaticResource SidebarBackgroundBrush}"
                     BorderBrush="{StaticResource GridLineBrush}"
-                    BorderThickness="0"
-                    MaxHeight="{Binding EngagementStripMaxHeight}">
+                    BorderThickness="0">
     
                 <!-- DataGrid с задачами -->
                 <DataGrid x:Name="TasksDataGrid"
@@ -621,8 +622,7 @@
             <!-- ═══════════════════════════════════════════════════════════ -->
             <Border Grid.Row="2" Grid.Column="2"
                     BorderBrush="{StaticResource GridLineBrush}"
-                    BorderThickness="0"
-                    MaxHeight="{Binding EngagementStripMaxHeight}">
+                    BorderThickness="0">
                 <controls:ResourceEngagementStrip
                     x:Name="EngagementStrip"
                     ResourceService="{Binding ResourceService}"
