@@ -216,30 +216,6 @@ public class IsSplitToVisibilityConverter : IValueConverter
 }
 
 /// <summary>
-/// Конвертирует DateTime в строку формата "dd.MM.yyyy".
-/// </summary>
-public class DateToStringConverter : IValueConverter
-{
-    public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
-    {
-        if (value is DateTime date)
-        {
-            return date.ToString("dd.MM.yyyy");
-        }
-        return string.Empty;
-    }
-
-    public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
-    {
-        if (value is string str && DateTime.TryParse(str, out var date))
-        {
-            return date;
-        }
-        return DateTime.Now;
-    }
-}
-
-/// <summary>
 /// Инвертирует bool значение.
 /// </summary>
 public class InverseBoolConverter : IValueConverter

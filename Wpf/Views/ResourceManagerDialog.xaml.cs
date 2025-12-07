@@ -1,11 +1,8 @@
-// GanttChart.WPF/Views/ResourceManagerDialog.xaml.cs
-
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
 using Core.Services;
 using Wpf.ViewModels;
-using Wpf.Converters;
 
 namespace Wpf.Views;
 
@@ -24,9 +21,9 @@ public partial class ResourceManagerDialog : Window
         InitializeComponent();
         var viewModel = new ResourceManagerDialogViewModel(resourceService, calendarService, projectManager);
         DataContext = viewModel;
-        
-        // Устанавливаем ProjectStart для статического конвертера
-        TimeSpanDateConverter.ProjectStart = projectManager.Start;
+    
+        // УДАЛЕНО: TimeSpanDateConverter.ProjectStart = projectManager.Start;
+        // ProjectStart теперь передаётся через binding в MultiBinding конвертерах
     }
 
     /// <summary>

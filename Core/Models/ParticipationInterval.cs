@@ -1,3 +1,7 @@
+// Core/Models/ParticipationInterval.cs
+using System.ComponentModel;
+using System.Runtime.CompilerServices;
+
 namespace Core.Models;
 
 /// <summary>
@@ -5,8 +9,12 @@ namespace Core.Models;
 /// Определяет период, когда ресурс доступен, и его максимальную нагрузку.
 /// Использует half-open интервал [Start, End).
 /// </summary>
-public class ParticipationInterval
+public class ParticipationInterval : INotifyPropertyChanged
 {
+    private TimeSpan _start;
+    private TimeSpan? _end;
+    private int _maxWorkload = 100;
+
     /// <summary>
     /// Уникальный идентификатор интервала.
     /// </summary>
@@ -20,21 +28,69 @@ public class ParticipationInterval
     /// <summary>
     /// Начало интервала (включительно).
     /// Измеряется в днях от начала проекта.
+    /// При изменении автоматически корректирует End, если End &lt;= Start.
     /// </summary>
-    public TimeSpan Start { get; set; }
+    public TimeSpan Start
+    {
+        get => _start;
+        set
+        {
+            if (_start == value) return;
+            
+            _start = value;
+            OnPropertyChanged();
+            
+            // Валидация: если End задан и End <= Start, корректируем End
+            if (_end.HasValue && _end.Value <= _start)
+            {
+                End = _start + TimeSpan.FromDays(1);
+            }
+        }
+    }
 
     /// <summary>
     /// Конец интервала (не включительно).
     /// Null означает бесконечный интервал (до конца проекта).
     /// Измеряется в днях от начала проекта.
+    /// Автоматически корректируется, если меньше или равен Start.
     /// </summary>
-    public TimeSpan? End { get; set; }
+    public TimeSpan? End
+    {
+        get => _end;
+        set
+        {
+            // null допустим (бессрочный интервал)
+            TimeSpan? correctedValue = value;
+            
+            if (value.HasValue && value.Value <= _start)
+            {
+                // Валидация: End не может быть <= Start
+                correctedValue = _start + TimeSpan.FromDays(1);
+            }
+            
+            if (_end == correctedValue) return;
+            
+            _end = correctedValue;
+            OnPropertyChanged();
+        }
+    }
 
     /// <summary>
     /// Максимальная нагрузка ресурса в этот период (0-100%).
     /// Для роли Constructor всегда должно быть 100.
     /// </summary>
-    public int MaxWorkload { get; set; } = 100;
+    public int MaxWorkload
+    {
+        get => _maxWorkload;
+        set
+        {
+            var clampedValue = Math.Clamp(value, 0, 100);
+            if (_maxWorkload == clampedValue) return;
+            
+            _maxWorkload = clampedValue;
+            OnPropertyChanged();
+        }
+    }
 
     /// <summary>
     /// Дата создания записи (для сортировки и аудита).
@@ -60,9 +116,12 @@ public class ParticipationInterval
         : this()
     {
         ResourceId = resourceId;
-        Start = start;
-        End = end;
-        MaxWorkload = Math.Clamp(maxWorkload, 0, 100);
+        _start = start;
+        // Применяем валидацию при создании
+        _end = end.HasValue && end.Value <= start 
+            ? start + TimeSpan.FromDays(1) 
+            : end;
+        _maxWorkload = Math.Clamp(maxWorkload, 0, 100);
     }
 
     /// <summary>
@@ -163,4 +222,15 @@ public class ParticipationInterval
 
         return errors;
     }
+
+    #region INotifyPropertyChanged
+
+    public event PropertyChangedEventHandler? PropertyChanged;
+
+    protected virtual void OnPropertyChanged([CallerMemberName] string? propertyName = null)
+    {
+        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
+    }
+
+    #endregion
 }

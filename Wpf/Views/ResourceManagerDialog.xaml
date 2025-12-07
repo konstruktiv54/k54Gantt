@@ -22,7 +22,10 @@
         <converters:BoolToEditModeHeaderConverter x:Key="BoolToEditModeHeaderConverter"/>
         <converters:BoolToSaveAddConverter x:Key="BoolToSaveAddConverter"/>
         <converters:EnumToDisplayNameConverter x:Key="EnumToDisplayNameConverter"/>
-        <converters:TimeSpanDateConverter x:Key="TimeSpanDateConverter"/>
+        
+        <converters:TimeSpanToDateMultiConverter x:Key="TimeSpanToDateMultiConverter"/>
+        <converters:TimeSpanToDateStringMultiConverter x:Key="TimeSpanToDateStringMultiConverter"/>
+        <converters:TimeSpanToDateStringMultiConverter x:Key="TimeSpanToDateStringInfinityConverter" NullDisplayText="∞"/>
     </Window.Resources>
 
     <Grid Margin="16">
@@ -188,36 +191,86 @@
                                                   Height="120"
                                                   Margin="0,4,0,4">
                                             <DataGrid.Columns>
-                                                <DataGridTemplateColumn Header="С" Width="100">
-                                                    <DataGridTemplateColumn.CellTemplate>
-                                                        <DataTemplate>
-                                                            <TextBlock Text="{Binding Start, 
-                                                                Converter={StaticResource TimeSpanDateConverter},
-                                                                StringFormat=d}"
-                                                                       VerticalAlignment="Center"
-                                                                       Margin="4,0"/>
-                                                        </DataTemplate>
-                                                    </DataGridTemplateColumn.CellTemplate>
-                                                </DataGridTemplateColumn>
-                                                
-                                                <DataGridTemplateColumn Header="По" Width="100">
+                                                <!-- Колонка "С" (Start) -->
+                                                <DataGridTemplateColumn Header="С" Width="110">
                                                     <DataGridTemplateColumn.CellTemplate>
                                                         <DataTemplate>
                                                             <TextBlock VerticalAlignment="Center" Margin="4,0">
                                                                 <TextBlock.Text>
-                                                                    <Binding Path="End" 
-                                                                             Converter="{StaticResource TimeSpanDateConverter}"
-                                                                             StringFormat="d"
-                                                                             TargetNullValue="∞"/>
+                                                                    <MultiBinding
+                                                                        Converter="{StaticResource TimeSpanToDateStringMultiConverter}">
+                                                                        <Binding Path="Start" />
+                                                                        <Binding
+                                                                            Path="DataContext.ResourceViewModel.ProjectStart"
+                                                                            RelativeSource="{RelativeSource AncestorType=Window}" />
+                                                                    </MultiBinding>
                                                                 </TextBlock.Text>
                                                             </TextBlock>
                                                         </DataTemplate>
                                                     </DataGridTemplateColumn.CellTemplate>
+                                                    <DataGridTemplateColumn.CellEditingTemplate>
+                                                        <DataTemplate>
+                                                            <DatePicker VerticalAlignment="Center"
+                                                                        DisplayDateStart="{Binding DataContext.ResourceViewModel.ProjectStart, 
+                                                   RelativeSource={RelativeSource AncestorType=Window}}">
+                                                                <DatePicker.SelectedDate>
+                                                                    <MultiBinding
+                                                                        Converter="{StaticResource TimeSpanToDateMultiConverter}"
+                                                                        Mode="TwoWay">
+                                                                        <Binding Path="Start" Mode="TwoWay"
+                                                                                UpdateSourceTrigger="PropertyChanged" />
+                                                                        <Binding
+                                                                            Path="DataContext.ResourceViewModel.ProjectStart"
+                                                                            RelativeSource="{RelativeSource AncestorType=Window}" />
+                                                                    </MultiBinding>
+                                                                </DatePicker.SelectedDate>
+                                                            </DatePicker>
+                                                        </DataTemplate>
+                                                    </DataGridTemplateColumn.CellEditingTemplate>
                                                 </DataGridTemplateColumn>
-                                                
-                                                <DataGridTextColumn Header="MaxWL%" 
-                                                                    Binding="{Binding MaxWorkload}" 
-                                                                    Width="60"/>
+
+                                                <!-- Колонка "По" (End) - nullable, показывает ∞ для null -->
+                                                <DataGridTemplateColumn Header="По" Width="110">
+                                                    <DataGridTemplateColumn.CellTemplate>
+                                                        <DataTemplate>
+                                                            <TextBlock VerticalAlignment="Center" Margin="4,0">
+                                                                <TextBlock.Text>
+                                                                    <MultiBinding
+                                                                        Converter="{StaticResource TimeSpanToDateStringInfinityConverter}">
+                                                                        <Binding Path="End" />
+                                                                        <Binding
+                                                                            Path="DataContext.ResourceViewModel.ProjectStart"
+                                                                            RelativeSource="{RelativeSource AncestorType=Window}" />
+                                                                    </MultiBinding>
+                                                                </TextBlock.Text>
+                                                            </TextBlock>
+                                                        </DataTemplate>
+                                                    </DataGridTemplateColumn.CellTemplate>
+                                                    <DataGridTemplateColumn.CellEditingTemplate>
+                                                        <DataTemplate>
+                                                            <DatePicker VerticalAlignment="Center"
+                                                                        DisplayDateStart="{Binding DataContext.ResourceViewModel.ProjectStart, 
+                                                   RelativeSource={RelativeSource AncestorType=Window}}">
+                                                                <DatePicker.SelectedDate>
+                                                                    <MultiBinding
+                                                                        Converter="{StaticResource TimeSpanToDateMultiConverter}"
+                                                                        Mode="TwoWay">
+                                                                        <Binding Path="End" Mode="TwoWay"
+                                                                                UpdateSourceTrigger="PropertyChanged" />
+                                                                        <Binding
+                                                                            Path="DataContext.ResourceViewModel.ProjectStart"
+                                                                            RelativeSource="{RelativeSource AncestorType=Window}" />
+                                                                    </MultiBinding>
+                                                                </DatePicker.SelectedDate>
+                                                            </DatePicker>
+                                                        </DataTemplate>
+                                                    </DataGridTemplateColumn.CellEditingTemplate>
+                                                </DataGridTemplateColumn>
+
+                                                <!-- Колонка MaxWorkload -->
+                                                <DataGridTextColumn Header="MaxWL%"
+                                                                    Binding="{Binding MaxWorkload}"
+                                                                    Width="60" />
                                             </DataGrid.Columns>
                                         </DataGrid>
                                         <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
@@ -247,35 +300,88 @@
                                                   Height="120"
                                                   Margin="0,4,0,4">
                                             <DataGrid.Columns>
-                                                <DataGridTemplateColumn Header="С" Width="100">
+                                                <!-- Колонка "С" (Start) -->
+                                                <DataGridTemplateColumn Header="С" Width="110">
                                                     <DataGridTemplateColumn.CellTemplate>
                                                         <DataTemplate>
-                                                            <TextBlock Text="{Binding Start, 
-                                                                Converter={StaticResource TimeSpanDateConverter},
-                                                                StringFormat=d}"
-                                                                       VerticalAlignment="Center"
-                                                                       Margin="4,0"/>
+                                                            <TextBlock VerticalAlignment="Center" Margin="4,0">
+                                                                <TextBlock.Text>
+                                                                    <MultiBinding
+                                                                        Converter="{StaticResource TimeSpanToDateStringMultiConverter}">
+                                                                        <Binding Path="Start" />
+                                                                        <Binding
+                                                                            Path="DataContext.ResourceViewModel.ProjectStart"
+                                                                            RelativeSource="{RelativeSource AncestorType=Window}" />
+                                                                    </MultiBinding>
+                                                                </TextBlock.Text>
+                                                            </TextBlock>
                                                         </DataTemplate>
                                                     </DataGridTemplateColumn.CellTemplate>
+                                                    <DataGridTemplateColumn.CellEditingTemplate>
+                                                        <DataTemplate>
+                                                            <DatePicker VerticalAlignment="Center"
+                                                                        DisplayDateStart="{Binding DataContext.ResourceViewModel.ProjectStart, 
+                                                   RelativeSource={RelativeSource AncestorType=Window}}">
+                                                                <DatePicker.SelectedDate>
+                                                                    <MultiBinding
+                                                                        Converter="{StaticResource TimeSpanToDateMultiConverter}"
+                                                                        Mode="TwoWay">
+                                                                        <Binding Path="Start" Mode="TwoWay"
+                                                                                UpdateSourceTrigger="PropertyChanged" />
+                                                                        <Binding
+                                                                            Path="DataContext.ResourceViewModel.ProjectStart"
+                                                                            RelativeSource="{RelativeSource AncestorType=Window}" />
+                                                                    </MultiBinding>
+                                                                </DatePicker.SelectedDate>
+                                                            </DatePicker>
+                                                        </DataTemplate>
+                                                    </DataGridTemplateColumn.CellEditingTemplate>
                                                 </DataGridTemplateColumn>
-                                                
-                                                <DataGridTemplateColumn Header="По" Width="100">
+
+                                                <!-- Колонка "По" (End) -->
+                                                <DataGridTemplateColumn Header="По" Width="110">
                                                     <DataGridTemplateColumn.CellTemplate>
                                                         <DataTemplate>
-                                                            <TextBlock Text="{Binding End, 
-                                                                Converter={StaticResource TimeSpanDateConverter},
-                                                                StringFormat=d}"
-                                                                       VerticalAlignment="Center"
-                                                                       Margin="4,0"/>
+                                                            <TextBlock VerticalAlignment="Center" Margin="4,0">
+                                                                <TextBlock.Text>
+                                                                    <MultiBinding
+                                                                        Converter="{StaticResource TimeSpanToDateStringMultiConverter}">
+                                                                        <Binding Path="End" />
+                                                                        <Binding
+                                                                            Path="DataContext.ResourceViewModel.ProjectStart"
+                                                                            RelativeSource="{RelativeSource AncestorType=Window}" />
+                                                                    </MultiBinding>
+                                                                </TextBlock.Text>
+                                                            </TextBlock>
                                                         </DataTemplate>
                                                     </DataGridTemplateColumn.CellTemplate>
+                                                    <DataGridTemplateColumn.CellEditingTemplate>
+                                                        <DataTemplate>
+                                                            <DatePicker VerticalAlignment="Center"
+                                                                        DisplayDateStart="{Binding DataContext.ResourceViewModel.ProjectStart, 
+                                                   RelativeSource={RelativeSource AncestorType=Window}}">
+                                                                <DatePicker.SelectedDate>
+                                                                    <MultiBinding
+                                                                        Converter="{StaticResource TimeSpanToDateMultiConverter}"
+                                                                        Mode="TwoWay">
+                                                                        <Binding Path="End" Mode="TwoWay"
+                                                                                UpdateSourceTrigger="PropertyChanged" />
+                                                                        <Binding
+                                                                            Path="DataContext.ResourceViewModel.ProjectStart"
+                                                                            RelativeSource="{RelativeSource AncestorType=Window}" />
+                                                                    </MultiBinding>
+                                                                </DatePicker.SelectedDate>
+                                                            </DatePicker>
+                                                        </DataTemplate>
+                                                    </DataGridTemplateColumn.CellEditingTemplate>
                                                 </DataGridTemplateColumn>
-                                                
-                                                <DataGridComboBoxColumn Header="Причина" 
+
+                                                <!-- Колонка "Причина" -->
+                                                <DataGridComboBoxColumn Header="Причина"
                                                                         SelectedItemBinding="{Binding Reason}"
                                                                         Width="*">
                                                     <DataGridComboBoxColumn.ItemsSource>
-                                                        <x:Array Type="sys:String" 
+                                                        <x:Array Type="sys:String"
                                                                  xmlns:sys="clr-namespace:System;assembly=mscorlib">
                                                             <sys:String>Отпуск</sys:String>
                                                             <sys:String>Болезнь</sys:String>

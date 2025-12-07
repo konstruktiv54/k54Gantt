@@ -1,3 +1,7 @@
+// Core/Models/Absence.cs
+using System.ComponentModel;
+using System.Runtime.CompilerServices;
+
 namespace Core.Models;
 
 /// <summary>
@@ -5,8 +9,12 @@ namespace Core.Models;
 /// Не блокирует назначения, но создаёт статус Overbooked при наличии назначений.
 /// Использует half-open интервал [Start, End).
 /// </summary>
-public class Absence
+public class Absence : INotifyPropertyChanged
 {
+    private TimeSpan _start;
+    private TimeSpan _end;
+    private string? _reason;
+
     /// <summary>
     /// Уникальный идентификатор отсутствия.
     /// </summary>
@@ -20,20 +28,62 @@ public class Absence
     /// <summary>
     /// Начало отсутствия (включительно).
     /// Измеряется в днях от начала проекта.
+    /// При изменении автоматически корректирует End, если End &lt; Start.
     /// </summary>
-    public TimeSpan Start { get; set; }
+    public TimeSpan Start
+    {
+        get => _start;
+        set
+        {
+            if (_start == value) return;
+            
+            _start = value;
+            OnPropertyChanged();
+            
+            // Валидация: End должен быть >= Start + 1 день
+            if (_end <= _start)
+            {
+                End = _start + TimeSpan.FromDays(1);
+            }
+        }
+    }
 
     /// <summary>
     /// Конец отсутствия (не включительно).
     /// Измеряется в днях от начала проекта.
+    /// Автоматически корректируется, если меньше Start.
     /// </summary>
-    public TimeSpan End { get; set; }
+    public TimeSpan End
+    {
+        get => _end;
+        set
+        {
+            // Валидация: End не может быть <= Start
+            var correctedValue = value <= _start 
+                ? _start + TimeSpan.FromDays(1) 
+                : value;
+            
+            if (_end == correctedValue) return;
+            
+            _end = correctedValue;
+            OnPropertyChanged();
+        }
+    }
 
     /// <summary>
     /// Причина отсутствия (опционально).
     /// Например: "Отпуск", "Болезнь", "Командировка".
     /// </summary>
-    public string? Reason { get; set; }
+    public string? Reason
+    {
+        get => _reason;
+        set
+        {
+            if (_reason == value) return;
+            _reason = value;
+            OnPropertyChanged();
+        }
+    }
 
     /// <summary>
     /// Дата создания записи (для сортировки и аудита).
@@ -46,6 +96,7 @@ public class Absence
     public Absence()
     {
         Id = Guid.NewGuid();
+        _end = TimeSpan.FromDays(1); // Минимальная длительность 1 день
     }
 
     /// <summary>
@@ -59,9 +110,10 @@ public class Absence
         : this()
     {
         ResourceId = resourceId;
-        Start = start;
-        End = end;
-        Reason = reason;
+        _start = start;
+        // Применяем валидацию при создании
+        _end = end <= start ? start + TimeSpan.FromDays(1) : end;
+        _reason = reason;
     }
 
     /// <summary>
@@ -165,4 +217,15 @@ public class Absence
             Other
         };
     }
+
+    #region INotifyPropertyChanged
+
+    public event PropertyChangedEventHandler? PropertyChanged;
+
+    protected virtual void OnPropertyChanged([CallerMemberName] string? propertyName = null)
+    {
+        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
+    }
+
+    #endregion
 }
