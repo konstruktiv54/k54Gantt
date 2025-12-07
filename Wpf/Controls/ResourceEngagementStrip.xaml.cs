@@ -682,7 +682,7 @@ public partial class ResourceEngagementStrip : UserControl
     /// <summary>
     /// Ширина колонки с именами ресурсов при экспорте.
     /// </summary>
-    private const double ExportResourceNamesWidth = 120;
+    private const double ExportResourceNamesWidth = 160;
 
     /// <summary>
     /// Возвращает данные полосы загрузки для экспорта.

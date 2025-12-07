@@ -235,7 +235,7 @@ public class TaskRenderer
                 var textBlock = new TextBlock
                 {
                     Text = workingDaysText,
-                    Foreground = Brushes.Red,
+                    Foreground = Brushes.Black,
                     FontSize = 10,
                     FontWeight = FontWeights.Bold,
                     FontFamily = new FontFamily("Segoe UI")

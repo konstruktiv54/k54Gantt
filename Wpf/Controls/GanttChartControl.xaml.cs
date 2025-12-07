@@ -2590,7 +2590,7 @@ public partial class GanttChartControl : UserControl
         var visibleTaskCount = visibleTasks.Count;
 
         // Вычисляем высоту БЕЗ лишнего буфера
-        var calculatedHeight = (visibleTaskCount+5) * RowHeight;
+        var calculatedHeight = (visibleTaskCount) * RowHeight;
 
         return calculatedHeight;
     }

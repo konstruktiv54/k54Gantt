@@ -238,7 +238,7 @@ public partial class MainWindow : Window
     #region Document Export
 
     /// <summary>
-    /// Экспортирует полный документ (GanttChart + EngagementStrip) в XPS.
+    /// Экспортирует полный документ (Sidebar + GanttChart + EngagementStrip) в XPS.
     /// </summary>
     /// <param name="projectName">Имя проекта для имени файла по умолчанию.</param>
     /// <returns>true если экспорт успешен.</returns>
@@ -273,24 +273,28 @@ public partial class MainWindow : Window
             // 3. Собираем данные от EngagementStrip
             var engagementData = EngagementStrip.GetExportDataForced();
 
-            // 4. Синхронизируем ширину (если EngagementStrip уже, расширяем)
+            // 4. Собираем данные от Sidebar (DataGrid)
+            var sidebarData = CreateSidebarExportData(ganttData);
+
+            // 5. Синхронизируем ширину (если EngagementStrip шире)
             if (engagementData != null)
             {
                 SynchronizeExportWidth(ganttData, engagementData);
             }
 
-            // 5. Создаём документ
+            // 6. Создаём документ
             var documentData = new DocumentExportData
             {
+                Sidebar = sidebarData,
                 GanttChart = ganttData,
                 EngagementStrip = engagementData,
                 SectionGap = 10
             };
 
-            // 6. Экспортируем
+            // 7. Экспортируем
             DocumentExportService.ExportToXps(documentData, saveDialog.FileName);
 
-            // 7. Предлагаем открыть файл
+            // 8. Предлагаем открыть файл
             var result = MessageBox.Show(
                 "XPS документ успешно сохранён. Открыть файл?",
                 "Экспорт завершён",
@@ -317,6 +321,23 @@ public partial class MainWindow : Window
                 MessageBoxImage.Error);
             return false;
         }
+    }
+
+    /// <summary>
+    /// Создаёт данные Sidebar для экспорта.
+    /// </summary>
+    /// <param name="ganttData">Данные GanttChart для синхронизации высоты.</param>
+    /// <returns>Данные Sidebar или null, если задач нет.</returns>
+    private SidebarExportData? CreateSidebarExportData(GanttChartExportData ganttData)
+    {
+        if (ViewModel?.FlatTasks == null || ViewModel.FlatTasks.Count == 0)
+            return null;
+
+        // Высота строк должна совпадать с GanttChart
+        // GanttChart.TotalHeight включает Header, нам нужна только высота Tasks
+        var rowsHeight = ganttData.Tasks.Height;
+
+        return SidebarExportRenderer.CreateExportData(ViewModel.FlatTasks, rowsHeight);
     }
 
     /// <summary>

@@ -607,7 +607,7 @@
                 <ScrollViewer x:Name="ResourceNamesScrollViewer"
                               VerticalScrollBarVisibility="Hidden"
                               HorizontalScrollBarVisibility="Disabled">
-                    <ItemsControl ItemsSource="{Binding ResourceService.Resources}">
+                    <ItemsControl ItemsSource="{Binding ResourceService.Resources}" HorizontalAlignment="Right">
                         <ItemsControl.ItemTemplate>
                             <DataTemplate>
                                 <Border Height="24" 
