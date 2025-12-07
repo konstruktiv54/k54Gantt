@@ -198,10 +198,13 @@ public class FileService
 
                 manager.Add(task);
 
-                if (TimeSpan.TryParse(taskData.Start, out var start))
-                    manager.SetStart(task, start);
-                if (TimeSpan.TryParse(taskData.Duration, out var duration))
-                    manager.SetDuration(task, duration);
+                if (TimeSpan.TryParse(taskData.Start, out var start) &&
+                    TimeSpan.TryParse(taskData.Duration, out var duration))
+                {
+                    task.Start = start;
+                    task.Duration = duration;
+                    task.End = start + duration;
+                }
                 manager.SetComplete(task, taskData.Complete);
                 
                 if (!string.IsNullOrEmpty(taskData.Deadline) && TimeSpan.TryParse(taskData.Deadline, out var deadline))
@@ -264,10 +267,14 @@ public class FileService
                             part.Name = partInfo.PartName;
                             manager.SetComplete(part, partInfo.PartComplete);
 
-                            if (TimeSpan.TryParse(partInfo.PartDuration, out var dur))
-                                manager.SetDuration(part, dur);
-                            if (TimeSpan.TryParse(partInfo.PartStart, out var st))
-                                manager.SetStart(part, st);
+                            if (TimeSpan.TryParse(partInfo.PartStart, out var st) &&
+                                TimeSpan.TryParse(partInfo.PartDuration, out var dur))
+                            {
+                                part.Start = st;
+                                part.Duration = dur;
+                                part.End = st + dur;
+                                
+                            }
                         }
                     }
                 }

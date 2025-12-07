@@ -954,23 +954,20 @@ public class ProjectManager<T, TR> : IProjectManager<T, TR>
     /// </summary>
     public void SetStart(T task, TimeSpan value)
     {
+        System.Diagnostics.Debug.WriteLine($"SetStart called: Task={task.Name}, value={value}");
+        System.Diagnostics.Debug.WriteLine(new System.Diagnostics.StackTrace().ToString());
         if (_mRegister.Contains(task) && value != task.Start && !IsGroup(task))
         {
             _SetStartHelper(task, value);
-
             _RecalculateAncestorsSchedule();
             _RecalculateSlack();
-            
             OnScheduleChanged();
         }
-        // Set start for a group task
         else if (_mRegister.Contains(task) && value != task.Start && IsGroup(task))
         {
             _SetGroupStartHelper(task, value);
-
             _RecalculateAncestorsSchedule();
             _RecalculateSlack();
-            
             OnScheduleChanged();
         }
     }
@@ -1321,6 +1318,7 @@ public class ProjectManager<T, TR> : IProjectManager<T, TR>
     private void _SetStartHelper(T task, TimeSpan value)
     {
         if (task.Start == value) return;
+    
         // Округляем значение до целых дней
         var wholeDays = (int)Math.Round(value.TotalDays);
         value = TimeSpan.FromDays(wholeDays);
@@ -1337,35 +1335,33 @@ public class ProjectManager<T, TR> : IProjectManager<T, TR>
             if (DirectPrecedentsOf(task).Any())
             {
                 var maxEnd = DirectPrecedentsOf(task).Max(x => x.End);
-                if (value <= maxEnd) value = maxEnd; // + One;
+                if (value <= maxEnd) value = maxEnd;
             }
 
-            // save offset just in case we need to use for moving task parts
-            var offset = value - task.Start;
+            // Сохраняем End
+            var originalEnd = task.End;
+        
+            // Валидация: Start не может быть >= End (минимум 1 день)
+            var maxStart = originalEnd - TimeSpan.FromDays(1);
+            if (value > maxStart)
+                value = maxStart;
 
             // cache value
             task.Start = value;
-            // affect self
-            task.End = task.Start + task.Duration;
-            task.Duration = task.End - task.Start;
-            
+            // End остаётся, Duration пересчитывается
+            task.Duration = originalEnd - task.Start;
+        
             _RecalculateWorkingDays(task);
 
             // calculate dependants
             _RecalculateDependantsOf(task);
 
-            // shift the task parts accordingly if task was a split task
-            if (_mPartsOfSplitTask.ContainsKey(task))
-            {
-                _mPartsOfSplitTask[task].ForEach(x =>
-                {
-                    x.Start += offset;
-                    x.End += offset;
-                });
-            }
+            // split tasks НЕ сдвигаем — Start изменился, но End остался
+            // (убрана логика сдвига частей)
         }
-
     }
+
+
 
     /// <summary>
     /// Set the start date for a group task. The relative dates between the tasks in the group will not be affected

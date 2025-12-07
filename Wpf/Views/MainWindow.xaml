@@ -297,7 +297,7 @@
             </Grid.RowDefinitions>
             
             <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="350" MinWidth="200" MaxWidth="500"/>
+                <ColumnDefinition Width="400" MinWidth="400" MaxWidth="550"/>
                 <ColumnDefinition Width="Auto"/>
                 <ColumnDefinition Width="*"/>
             </Grid.ColumnDefinitions>
@@ -327,7 +327,12 @@
                           HeadersVisibility="Column"
                           VirtualizingPanel.ScrollUnit="Pixel"
                           ContextMenu="{StaticResource TaskContextMenu}">
-                        <DataGrid.Columns>
+                    <DataGrid.Resources>
+                        <Style TargetType="DataGridColumnHeader">
+                            <Setter Property="HorizontalContentAlignment" Value="Center"/>
+                        </Style>
+                    </DataGrid.Resources>
+                    <DataGrid.Columns>
                             <!-- ═══════════════════════════════════════════════════════════ -->
                             <!-- Имя задачи с отступом по уровню                             -->
                             <!-- ═══════════════════════════════════════════════════════════ -->
@@ -372,10 +377,10 @@
                             <!-- ═══════════════════════════════════════════════════════════ -->
                             <!-- Дата начала (DatePicker)                                    -->
                             <!-- ═══════════════════════════════════════════════════════════ -->
-                            <DataGridTemplateColumn Header="Начало" Width="95" SortMemberPath="StartDate">
+                            <DataGridTemplateColumn Header="Старт" Width="60" SortMemberPath="StartDate">
                                 <DataGridTemplateColumn.CellTemplate>
                                     <DataTemplate>
-                                        <TextBlock Text="{Binding StartDate, StringFormat=dd.MM.yyyy}"
+                                        <TextBlock Text="{Binding StartDate, StringFormat=dd.MM.yy}"
                                                    VerticalAlignment="Center"
                                                    HorizontalAlignment="Center"
                                                    Padding="2,0" />
@@ -395,10 +400,10 @@
                             <!-- ═══════════════════════════════════════════════════════════ -->
                             <!-- Длительность (дней)                                         -->
                             <!-- ═══════════════════════════════════════════════════════════ -->
-                            <DataGridTextColumn Header="Дней (рабочих)"
-                                                Binding="{Binding DaysDisplay}"
-                                                Width="45"
-                                                IsReadOnly="True">
+                            <DataGridTextColumn Width="60" IsReadOnly="True" Binding="{Binding DaysDisplay}">
+                                <DataGridTextColumn.Header>
+                                    <TextBlock Text="Дней&#x0a;(рабоч.)" TextAlignment="Center"/>
+                                </DataGridTextColumn.Header>
                                 <DataGridTextColumn.ElementStyle>
                                     <Style TargetType="TextBlock">
                                         <Setter Property="HorizontalAlignment" Value="Center" />
@@ -406,11 +411,34 @@
                                     </Style>
                                 </DataGridTextColumn.ElementStyle>
                             </DataGridTextColumn>
+                            
+                            <!-- ═══════════════════════════════════════════════════════════ -->
+                            <!-- Дата окончания (DatePicker)                                    -->
+                            <!-- ═══════════════════════════════════════════════════════════ -->
+                            <DataGridTemplateColumn Header="Финиш" Width="60" SortMemberPath="EndDate">
+                                <DataGridTemplateColumn.CellTemplate>
+                                    <DataTemplate>
+                                        <TextBlock Text="{Binding EndDate, StringFormat=dd.MM.yy}"
+                                                   VerticalAlignment="Center"
+                                                   HorizontalAlignment="Center"
+                                                   Padding="2,0" />
+                                    </DataTemplate>
+                                </DataGridTemplateColumn.CellTemplate>
+                                <DataGridTemplateColumn.CellEditingTemplate>
+                                    <DataTemplate>
+                                        <DatePicker
+                                            SelectedDate="{Binding EndDate, UpdateSourceTrigger=PropertyChanged}"
+                                            BorderThickness="0"
+                                            Padding="0"
+                                            VerticalContentAlignment="Center" />
+                                    </DataTemplate>
+                                </DataGridTemplateColumn.CellEditingTemplate>
+                            </DataGridTemplateColumn>
 
                             <!-- ═══════════════════════════════════════════════════════════ -->
                             <!-- Прогресс (%)                                                -->
                             <!-- ═══════════════════════════════════════════════════════════ -->
-                            <DataGridTemplateColumn Header="%" Width="45" SortMemberPath="CompletePercent">
+                            <DataGridTemplateColumn Header="%" Width="40" SortMemberPath="CompletePercent">
                                 <DataGridTemplateColumn.CellTemplate>
                                     <DataTemplate>
                                         <TextBlock Text="{Binding CompletePercent, StringFormat={}{0}%}"
@@ -423,7 +451,7 @@
                             <!-- ═══════════════════════════════════════════════════════════ -->
                             <!-- Дедлайн (DatePicker с возможностью очистки)                 -->
                             <!-- ═══════════════════════════════════════════════════════════ -->
-                            <DataGridTemplateColumn Header="Дедлайн" Width="95" SortMemberPath="DeadlineDate">
+                            <DataGridTemplateColumn Header="Дедлайн" Width="60" SortMemberPath="DeadlineDate">
                                 <DataGridTemplateColumn.CellTemplate>
                                     <DataTemplate>
                                         <Grid>
@@ -434,7 +462,7 @@
                                                 <TextBlock.Style>
                                                     <Style TargetType="TextBlock">
                                                         <Setter Property="Text"
-                                                                Value="{Binding DeadlineDate, StringFormat=dd.MM.yyyy}" />
+                                                                Value="{Binding DeadlineDate, StringFormat=dd.MM.yy}" />
                                                         <Setter Property="Foreground"
                                                                 Value="{StaticResource TextPrimaryBrush}" />
                                                         <Style.Triggers>

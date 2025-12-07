@@ -113,6 +113,7 @@ public partial class TaskItemViewModel : ObservableObject
         get => _projectStart.Add(Task.Start);
         set
         {
+            System.Diagnostics.Debug.WriteLine($"StartDate setter: Task={Task.Name}, OldStart={Task.Start}, NewValue={value}, ProjectStart={_projectStart}");
             var newStart = value - _projectStart;
             if (newStart < TimeSpan.Zero)
                 newStart = TimeSpan.Zero;
@@ -128,7 +129,25 @@ public partial class TaskItemViewModel : ObservableObject
     /// <summary>
     /// Дата окончания задачи (только чтение).
     /// </summary>
-    public DateTime EndDate => _projectStart.Add(Task.End);
+    //public DateTime EndDate => _projectStart.Add(Task.End);
+    public DateTime EndDate
+    {
+        get => _projectStart.Add(Task.End);
+        set 
+        {
+            var newEnd = value - _projectStart;
+            var minEnd = Task.Start + TimeSpan.FromDays(1);
+            if (newEnd < minEnd)
+                newEnd = minEnd;
+            
+            if (Task.End == newEnd) return;
+            _manager.SetEnd(Task,newEnd);
+            // логика установки даты окончания
+            OnPropertyChanged();
+            OnPropertyChanged(nameof(DaysDisplay));
+            _onTaskModified?.Invoke();
+        }
+    }
 
     /// <summary>
     /// Длительность в днях (редактируемая).
