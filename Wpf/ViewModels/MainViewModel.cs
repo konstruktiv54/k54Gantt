@@ -1336,6 +1336,7 @@ public partial class MainViewModel : ObservableObject
 
         _hierarchyBuilder = new TaskHierarchyBuilder(
             ProjectManager,
+            WorkingDaysCalculator,
             OnExpandChanged,
             OnShowPartsChanged,
             OnTaskModifiedFromSidebar);

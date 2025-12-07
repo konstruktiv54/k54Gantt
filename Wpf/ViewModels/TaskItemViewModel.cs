@@ -19,6 +19,7 @@ public partial class TaskItemViewModel : ObservableObject
     private readonly Action _onExpandChanged;
     private readonly Action<TaskItemViewModel>? _onShowPartsChanged;
     private readonly Action? _onTaskModified;
+    private readonly WorkingDaysCalculator _workingDaysCalculator;
 
     #endregion
 
@@ -38,6 +39,7 @@ public partial class TaskItemViewModel : ObservableObject
         Task task,
         ProjectManager manager,
         DateTime projectStart,
+        WorkingDaysCalculator workingDaysCalculator,
         int level = 0,
         TaskItemViewModel? parent = null,
         Action? onExpandChanged = null,
@@ -52,6 +54,7 @@ public partial class TaskItemViewModel : ObservableObject
         _onExpandChanged = onExpandChanged ?? (() => { });
         _onShowPartsChanged = onShowPartsChanged;
         _onTaskModified = onTaskModified;
+        _workingDaysCalculator = workingDaysCalculator;
 
         // Инициализация состояния
         _isExpanded = !task.IsCollapsed;
@@ -364,6 +367,10 @@ public partial class TaskItemViewModel : ObservableObject
 
     #region Display Properties
 
+    public int WorkingDays => Task.WorkingDays;
+
+    public string DaysDisplay => $"{DurationDays} ({WorkingDays})";
+    
     /// <summary>
     /// Иконка для TreeView (Material Design Icon name).
     /// </summary>

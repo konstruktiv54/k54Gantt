@@ -395,8 +395,8 @@
                             <!-- ═══════════════════════════════════════════════════════════ -->
                             <!-- Длительность (дней)                                         -->
                             <!-- ═══════════════════════════════════════════════════════════ -->
-                            <DataGridTextColumn Header="Дней"
-                                                Binding="{Binding DurationDays}"
+                            <DataGridTextColumn Header="Дней (рабочих)"
+                                                Binding="{Binding DaysDisplay}"
                                                 Width="45"
                                                 IsReadOnly="True">
                                 <DataGridTextColumn.ElementStyle>
@@ -513,6 +513,7 @@
                     CalendarService="{Binding CalendarService}"
                     ResourceService="{Binding ResourceService}"
                     UndoRedoService="{Binding UndoRedoService}"
+                    WorkingDaysCalculator="{Binding WorkingDaysCalculator}"
                     SelectedTask="{Binding SelectedTask, Mode=TwoWay}"
                     ZoomLevel="{Binding ZoomLevel, Mode=TwoWay}"
                     ColumnWidth="{Binding ColumnWidth}"

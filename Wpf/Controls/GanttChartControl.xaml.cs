@@ -29,7 +29,7 @@ public partial class GanttChartControl : UserControl
     private readonly GridRenderer _gridRenderer;
     private readonly HeaderRenderer _headerRenderer;
     private readonly TaskRenderer _taskRenderer;
-
+    
     private bool _isRendering;
     private System.Windows.Threading.DispatcherTimer? _zoomDebounceTimer;
     private const int ZoomDebounceMs = 50;
@@ -120,6 +120,19 @@ public partial class GanttChartControl : UserControl
         get => (ProjectManager?)GetValue(ProjectManagerProperty);
         set => SetValue(ProjectManagerProperty, value);
     }
+    
+    public WorkingDaysCalculator? WorkingDaysCalculator
+    {
+        get => (WorkingDaysCalculator?)GetValue(WorkingDaysCalculatorProperty);
+        set => SetValue(WorkingDaysCalculatorProperty, value);
+    }
+
+    public static readonly DependencyProperty WorkingDaysCalculatorProperty =
+        DependencyProperty.Register(
+            nameof(WorkingDaysCalculator),
+            typeof(WorkingDaysCalculator),
+            typeof(GanttChartControl),
+            new PropertyMetadata(null));
 
     /// <summary>
     /// Ширина одной колонки (день) в пикселях.
