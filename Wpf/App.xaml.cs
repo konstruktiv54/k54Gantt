@@ -27,6 +27,11 @@ public partial class App : Application
         var serviceCollection = new ServiceCollection();
         ConfigureServices(serviceCollection);
         Services = serviceCollection.BuildServiceProvider();
+        
+        // Связываем FileService с ResourceService и ProductionCalendarService
+        var fileService = Services.GetRequiredService<FileService>();
+        fileService.ResourceService = Services.GetRequiredService<ResourceService>();
+        fileService.ProductionCalendarService = Services.GetRequiredService<ProductionCalendarService>();
 
         // Создаём и показываем главное окно
         var mainWindow = new MainWindow
@@ -45,6 +50,8 @@ public partial class App : Application
     {
         services.AddSingleton<FileService>();
         services.AddSingleton<ResourceService>();
+        services.AddSingleton<ProductionCalendarService>();
+        services.AddSingleton<WorkingDaysCalculator>();
         services.AddSingleton<EngagementCalculationService>();
         services.AddSingleton<AutoSaveManager>();
         services.AddSingleton<TaskCopyService>();

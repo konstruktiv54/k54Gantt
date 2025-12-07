@@ -25,9 +25,14 @@ public class ProjectManagerData
     public List<AbsenceData> Absences { get; set; } = new();
 
     /// <summary>
+    /// Праздничные дни производственного календаря.
+    /// </summary>
+    public List<HolidayData> Holidays { get; set; } = new();
+
+    /// <summary>
     /// Версия формата данных для миграции.
     /// </summary>
-    public int FormatVersion { get; set; } = 2;
+    public int FormatVersion { get; set; } = 3;
 
     // Метод для преобразования в ProjectManager
     public ProjectManager<MyTask, object> ToProjectManager()

@@ -26,15 +26,14 @@ public class ProjectManager<T, TR> : IProjectManager<T, TR>
     HashSet<T> _mRegister = new();
     List<T> _mRootTasks = new();
     Dictionary<T, List<T>> _mMembersOfGroup = new Dictionary<T, List<T>>(); // Map group to list of members
-
-    Dictionary<T, HashSet<T>>
-        _mDependantsOfPrecedent = new Dictionary<T, HashSet<T>>(); // Map precendent to list of dependents
-
+    Dictionary<T, HashSet<T>> _mDependantsOfPrecedent = new Dictionary<T, HashSet<T>>(); // Map precendent to list of dependents
     Dictionary<T, HashSet<TR>> _mResourcesOfTask = new Dictionary<T, HashSet<TR>>(); // Map task to list of resources
     Dictionary<T, List<T>> _mPartsOfSplitTask = new Dictionary<T, List<T>>(); // Map split task to list of task parts
     Dictionary<T, T> _mSplitTaskOfPart = new Dictionary<T, T>(); // Map a task part to the original split task
     Dictionary<T, T> _mGroupOfMember = new Dictionary<T, T>(); // Map member task to parent group task
     Dictionary<T, int> _mTaskIndices = new Dictionary<T, int>(); // Map the task to its zero-based index order position
+    
+    internal WorkingDaysCalculator? WorkingDaysCalculator { get; private set; }
 
     #region Events
 
@@ -372,7 +371,7 @@ public class ProjectManager<T, TR> : IProjectManager<T, TR>
     /// <param name="offset"></param>
     public void Move(T task, int offset)
     {
-        if (task != null && _mRegister.Contains(task) && offset != 0)
+        if (_mRegister.Contains(task) && offset != 0)
         {
             if (IsPart(task)) task = SplitTaskOf(task);
 
@@ -955,23 +954,20 @@ public class ProjectManager<T, TR> : IProjectManager<T, TR>
     /// </summary>
     public void SetStart(T task, TimeSpan value)
     {
+        System.Diagnostics.Debug.WriteLine($"SetStart called: Task={task.Name}, value={value}");
+        System.Diagnostics.Debug.WriteLine(new System.Diagnostics.StackTrace().ToString());
         if (_mRegister.Contains(task) && value != task.Start && !IsGroup(task))
         {
             _SetStartHelper(task, value);
-
             _RecalculateAncestorsSchedule();
             _RecalculateSlack();
-            
             OnScheduleChanged();
         }
-        // Set start for a group task
         else if (_mRegister.Contains(task) && value != task.Start && IsGroup(task))
         {
             _SetGroupStartHelper(task, value);
-
             _RecalculateAncestorsSchedule();
             _RecalculateSlack();
-            
             OnScheduleChanged();
         }
     }
@@ -1005,6 +1001,7 @@ public class ProjectManager<T, TR> : IProjectManager<T, TR>
 
         // Устанавливаем округленную продолжительность
         SetEnd(task, task.Start + roundedDuration);
+        _RecalculateWorkingDays(task);
     }
 
     /// <summary>
@@ -1321,6 +1318,7 @@ public class ProjectManager<T, TR> : IProjectManager<T, TR>
     private void _SetStartHelper(T task, TimeSpan value)
     {
         if (task.Start == value) return;
+    
         // Округляем значение до целых дней
         var wholeDays = (int)Math.Round(value.TotalDays);
         value = TimeSpan.FromDays(wholeDays);
@@ -1337,32 +1335,33 @@ public class ProjectManager<T, TR> : IProjectManager<T, TR>
             if (DirectPrecedentsOf(task).Any())
             {
                 var maxEnd = DirectPrecedentsOf(task).Max(x => x.End);
-                if (value <= maxEnd) value = maxEnd; // + One;
+                if (value <= maxEnd) value = maxEnd;
             }
 
-            // save offset just in case we need to use for moving task parts
-            var offset = value - task.Start;
+            // Сохраняем End
+            var originalEnd = task.End;
+        
+            // Валидация: Start не может быть >= End (минимум 1 день)
+            var maxStart = originalEnd - TimeSpan.FromDays(1);
+            if (value > maxStart)
+                value = maxStart;
 
             // cache value
             task.Start = value;
-            // affect self
-            task.End = task.Start + task.Duration;
-            task.Duration = task.End - task.Start;
+            // End остаётся, Duration пересчитывается
+            task.Duration = originalEnd - task.Start;
+        
+            _RecalculateWorkingDays(task);
 
             // calculate dependants
             _RecalculateDependantsOf(task);
 
-            // shift the task parts accordingly if task was a split task
-            if (_mPartsOfSplitTask.ContainsKey(task))
-            {
-                _mPartsOfSplitTask[task].ForEach(x =>
-                {
-                    x.Start += offset;
-                    x.End += offset;
-                });
-            }
+            // split tasks НЕ сдвигаем — Start изменился, но End остался
+            // (убрана логика сдвига частей)
         }
     }
+
+
 
     /// <summary>
     /// Set the start date for a group task. The relative dates between the tasks in the group will not be affected
@@ -1437,6 +1436,7 @@ public class ProjectManager<T, TR> : IProjectManager<T, TR>
                 task.End = value;
                 task.Duration = task.End - task.Start;
 
+                _RecalculateWorkingDays(task);
                 _RecalculateDependantsOf(task);
 
                 if (isSplitTask)
@@ -1446,6 +1446,7 @@ public class ProjectManager<T, TR> : IProjectManager<T, TR>
                 }
             }
         }
+
     }
     
     /// <summary>
@@ -1490,6 +1491,14 @@ public class ProjectManager<T, TR> : IProjectManager<T, TR>
             task.Note = note;
             OnScheduleChanged();
         }
+    }
+    
+    /// <summary>
+    /// Устанавливает калькулятор рабочих дней. Вызывается из MainViewModel.
+    /// </summary>
+    public void SetWorkingDaysCalculator(WorkingDaysCalculator calculator)
+    {
+        WorkingDaysCalculator = calculator ?? throw new ArgumentNullException(nameof(calculator));
     }
 
     private void _SetPartStartHelper(T part, TimeSpan value)
@@ -1709,4 +1718,20 @@ public class ProjectManager<T, TR> : IProjectManager<T, TR>
         }
     }
     
+    private void _RecalculateWorkingDays(T task)
+    {
+        if (WorkingDaysCalculator == null)
+        {
+            // Резервный вариант — если калькулятор не установлен
+            task.WorkingDays = (int)Math.Round(task.Duration.TotalDays);
+            return;
+        }
+
+        var workingDays = WorkingDaysCalculator.CalculateWorkingDays(task, Start);
+
+        if (task.WorkingDays != workingDays)
+        {
+            task.WorkingDays = workingDays;
+        }
+    }
 }

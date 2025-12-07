@@ -222,6 +222,42 @@ public class TaskRenderer
             Canvas.SetTop(percentText, y + (height - percentText.DesiredSize.Height) / 2);
             canvas.Children.Add(percentText);
         }
+        
+        // Рабочие дни (красным справа внутри бара) ===
+        if (width > 60) // только если места хватает
+        {
+            var workingDays = _control.WorkingDaysCalculator?
+                .CalculateWorkingDays(task, _control.ProjectManager.Start) ?? 0;
+
+            if (workingDays > 0)
+            {
+                var workingDaysText = workingDays.ToString();
+                var textBlock = new TextBlock
+                {
+                    Text = workingDaysText,
+                    Foreground = Brushes.Black,
+                    FontSize = 10,
+                    FontWeight = FontWeights.Bold,
+                    FontFamily = new FontFamily("Segoe UI")
+                };
+
+                textBlock.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
+                var textX = x + width - textBlock.DesiredSize.Width - 8;
+                var textY = y + (height - textBlock.DesiredSize.Height) / 2;
+
+                // Не перекрывать процент выполнения
+                if (task.Complete > 0 && task.Complete < 1.0f)
+                {
+                    var percentTextWidth = EstimateTextWidth($"{(int)(task.Complete * 100)}%", 9);
+                    if (textX < x + width / 2 + percentTextWidth / 2 + 10)
+                        textX = x + width / 2 + percentTextWidth / 2 + 10;
+                }
+
+                Canvas.SetLeft(textBlock, textX);
+                Canvas.SetTop(textBlock, textY);
+                canvas.Children.Add(textBlock);
+            }
+        }
     }
 
     private void RenderGroupTask(Canvas canvas, Task task, double x, double y, double width, double height)

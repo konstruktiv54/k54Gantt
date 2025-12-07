@@ -10,20 +10,26 @@ namespace Core.Services;
 
 /// <summary>
 /// Сервис для сохранения и загрузки проектов Gantt Chart в формате JSON.
-/// Поддерживает сериализацию задач, сплитов, групп, ресурсов, интервалов участия и отсутствий.
+/// Поддерживает сериализацию задач, сплитов, групп, ресурсов, интервалов участия, отсутствий и праздников.
 /// </summary>
 public class FileService
 {
     /// <summary>
     /// Текущая версия формата файла.
     /// </summary>
-    private const int CurrentFormatVersion = 2;
+    private const int CurrentFormatVersion = 3;
 
     /// <summary>
     /// Ссылка на ResourceService для сохранения/загрузки ресурсов.
     /// Может быть null — в этом случае ресурсы не сохраняются/не загружаются.
     /// </summary>
     public ResourceService? ResourceService { get; set; }
+
+    /// <summary>
+    /// Ссылка на ProductionCalendarService для сохранения/загрузки праздников.
+    /// Может быть null — в этом случае праздники не сохраняются/не загружаются.
+    /// </summary>
+    public ProductionCalendarService? ProductionCalendarService { get; set; }
 
     /// <summary>
     /// Сохраняет проект в JSON файл.
@@ -86,6 +92,22 @@ public class FileService
                 catch (Exception ex)
                 {
                     System.Diagnostics.Debug.WriteLine("ResourceService.GetAllDataExtended failed: " + ex.Message);
+                }
+            }
+
+            // Добавляем праздники
+            if (ProductionCalendarService != null)
+            {
+                try
+                {
+                    var holidays = ProductionCalendarService.GetAllHolidays();
+                    managerData.Holidays = holidays
+                        .Select(HolidayData.FromDomain)
+                        .ToList();
+                }
+                catch (Exception ex)
+                {
+                    System.Diagnostics.Debug.WriteLine("ProductionCalendarService.GetAllHolidays failed: " + ex.Message);
                 }
             }
 
@@ -176,10 +198,13 @@ public class FileService
 
                 manager.Add(task);
 
-                if (TimeSpan.TryParse(taskData.Start, out var start))
-                    manager.SetStart(task, start);
-                if (TimeSpan.TryParse(taskData.Duration, out var duration))
-                    manager.SetDuration(task, duration);
+                if (TimeSpan.TryParse(taskData.Start, out var start) &&
+                    TimeSpan.TryParse(taskData.Duration, out var duration))
+                {
+                    task.Start = start;
+                    task.Duration = duration;
+                    task.End = start + duration;
+                }
                 manager.SetComplete(task, taskData.Complete);
                 
                 if (!string.IsNullOrEmpty(taskData.Deadline) && TimeSpan.TryParse(taskData.Deadline, out var deadline))
@@ -242,10 +267,14 @@ public class FileService
                             part.Name = partInfo.PartName;
                             manager.SetComplete(part, partInfo.PartComplete);
 
-                            if (TimeSpan.TryParse(partInfo.PartDuration, out var dur))
-                                manager.SetDuration(part, dur);
-                            if (TimeSpan.TryParse(partInfo.PartStart, out var st))
-                                manager.SetStart(part, st);
+                            if (TimeSpan.TryParse(partInfo.PartStart, out var st) &&
+                                TimeSpan.TryParse(partInfo.PartDuration, out var dur))
+                            {
+                                part.Start = st;
+                                part.Duration = dur;
+                                part.End = st + dur;
+                                
+                            }
                         }
                     }
                 }
@@ -319,6 +348,23 @@ public class FileService
                 }
             }
 
+            // Загружаем праздники
+            if (ProductionCalendarService != null && managerData.Holidays != null && managerData.Holidays.Count > 0)
+            {
+                try
+                {
+                    var holidays = managerData.Holidays
+                        .Select(h => h.ToDomain())
+                        .ToList();
+
+                    ProductionCalendarService.LoadHolidays(holidays);
+                }
+                catch (Exception ex)
+                {
+                    System.Diagnostics.Debug.WriteLine("Loading holidays failed: " + ex.Message);
+                }
+            }
+
             return manager;
         }
         catch (Exception ex)
@@ -378,7 +424,18 @@ public class FileService
                 }
             }
 
-            System.Diagnostics.Debug.WriteLine($"Migrated data from version {fromVersion} to {CurrentFormatVersion}");
+            System.Diagnostics.Debug.WriteLine($"Migrated data from version {fromVersion} to 2");
+        }
+
+        if (fromVersion < 3)
+        {
+            // Миграция с версии 2 на 3: добавлены праздники
+            // Праздники — пустой список по умолчанию, миграция не требуется
+            if (data.Holidays == null)
+            {
+                data.Holidays = new List<HolidayData>();
+            }
+            System.Diagnostics.Debug.WriteLine($"Migrated data from version {fromVersion} to 3");
         }
     }
 }

@@ -117,7 +117,16 @@ public class EngagementStripExportData
 /// </summary>
 public class DocumentExportData
 {
-    public double TimelineOffsetX => EngagementStrip?.ResourceNamesWidth ?? 0;
+    /// <summary>
+    /// Смещение timeline (ширина Sidebar или ResourceNames).
+    /// Sidebar имеет приоритет над ResourceNames.
+    /// </summary>
+    public double TimelineOffsetX => Sidebar?.Width ?? EngagementStrip?.ResourceNamesWidth ?? 0;
+    
+    /// <summary>
+    /// Данные Sidebar (таблица задач).
+    /// </summary>
+    public SidebarExportData? Sidebar { get; init; }
     
     /// <summary>
     /// Данные диаграммы Ганта.
@@ -137,14 +146,18 @@ public class DocumentExportData
     
     /// <summary>
     /// Общая ширина документа.
-    /// Включает колонку имён ресурсов, если она есть.
     /// </summary>
     public double TotalWidth
     {
         get
         {
+            var sidebarWidth = Sidebar?.Width ?? 0;
             var namesWidth = EngagementStrip?.ResourceNamesWidth ?? 0;
-            return Math.Max(GanttChart.TotalWidth, namesWidth + (EngagementStrip?.Engagement.Width ?? 0));
+            var leftColumnWidth = Math.Max(sidebarWidth, namesWidth);
+            
+            return Math.Max(
+                leftColumnWidth + GanttChart.TotalWidth,
+                leftColumnWidth + (EngagementStrip?.Engagement.Width ?? 0));
         }
     }
     
@@ -166,4 +179,35 @@ public class DocumentExportData
             return height;
         }
     }
+}
+
+/// <summary>
+/// Данные Sidebar (DataGrid) для экспорта.
+/// </summary>
+public class SidebarExportData
+{
+    /// <summary>
+    /// Canvas с заголовками колонок.
+    /// </summary>
+    public required ExportLayerData Header { get; init; }
+    
+    /// <summary>
+    /// Canvas со строками задач.
+    /// </summary>
+    public required ExportLayerData Rows { get; init; }
+    
+    /// <summary>
+    /// Ширина Sidebar (фиксированная).
+    /// </summary>
+    public double Width { get; init; } = 400;
+    
+    /// <summary>
+    /// Высота заголовка.
+    /// </summary>
+    public double HeaderHeight => Header.Height;
+    
+    /// <summary>
+    /// Высота области строк.
+    /// </summary>
+    public double RowsHeight => Rows.Height;
 }

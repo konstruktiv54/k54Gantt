@@ -55,6 +55,7 @@
                                     <TextBlock Grid.Column="1"
                                                Text="{Binding Name}"
                                                VerticalAlignment="Center"
+                                               HorizontalAlignment="Right"
                                                TextTrimming="CharacterEllipsis"
                                                FontSize="11"/>
                                 </Grid>

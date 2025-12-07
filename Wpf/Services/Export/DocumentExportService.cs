@@ -32,7 +32,7 @@ public static class DocumentExportService
             File.Delete(filePath);
         }
 
-        // Смещение timeline (ширина колонки имён, если есть)
+        // Смещение timeline (ширина Sidebar или ResourceNames)
         double timelineOffsetX = data.TimelineOffsetX;
 
         // Создаём FixedPage с полными размерами документа
@@ -46,27 +46,57 @@ public static class DocumentExportService
         double currentY = 0;
 
         // ═══════════════════════════════════════════════════════════════════
-        // 1. HEADER (заголовок с месяцами и днями)
+        // 1. SIDEBAR HEADER (заголовки колонок таблицы)
+        // ═══════════════════════════════════════════════════════════════════
+        if (data.Sidebar != null)
+        {
+            var sidebarHeaderClone = CloneCanvasAsVisual(
+                data.Sidebar.Header.Canvas,
+                data.Sidebar.Header.Width,
+                data.Sidebar.Header.Height);
+
+            FixedPage.SetLeft(sidebarHeaderClone, 0);
+            FixedPage.SetTop(sidebarHeaderClone, currentY);
+            fixedPage.Children.Add(sidebarHeaderClone);
+        }
+
+        // ═══════════════════════════════════════════════════════════════════
+        // 1.1. TIMELINE HEADER (заголовок с месяцами и днями)
         // ═══════════════════════════════════════════════════════════════════
         var headerClone = CloneCanvasAsVisual(
             data.GanttChart.Header.Canvas,
             data.GanttChart.Header.Width,
             data.GanttChart.Header.Height);
-        
+
         FixedPage.SetLeft(headerClone, timelineOffsetX);
         FixedPage.SetTop(headerClone, currentY);
         fixedPage.Children.Add(headerClone);
-        
+
         currentY += data.GanttChart.Header.Height;
 
         // ═══════════════════════════════════════════════════════════════════
-        // 2. GRID LAYER (сетка, выходные дни)
+        // 2. SIDEBAR ROWS (строки задач)
+        // ═══════════════════════════════════════════════════════════════════
+        if (data.Sidebar != null)
+        {
+            var sidebarRowsClone = CloneCanvasAsVisual(
+                data.Sidebar.Rows.Canvas,
+                data.Sidebar.Rows.Width,
+                data.Sidebar.Rows.Height);
+
+            FixedPage.SetLeft(sidebarRowsClone, 0);
+            FixedPage.SetTop(sidebarRowsClone, currentY);
+            fixedPage.Children.Add(sidebarRowsClone);
+        }
+
+        // ═══════════════════════════════════════════════════════════════════
+        // 2.1. GRID LAYER (сетка, выходные дни)
         // ═══════════════════════════════════════════════════════════════════
         var gridClone = CloneCanvasAsVisual(
             data.GanttChart.Grid.Canvas,
             data.GanttChart.Grid.Width,
             data.GanttChart.Grid.Height);
-        
+
         FixedPage.SetLeft(gridClone, timelineOffsetX);
         FixedPage.SetTop(gridClone, currentY);
         fixedPage.Children.Add(gridClone);
@@ -78,7 +108,7 @@ public static class DocumentExportService
             data.GanttChart.Tasks.Canvas,
             data.GanttChart.Tasks.Width,
             data.GanttChart.Tasks.Height);
-        
+
         FixedPage.SetLeft(taskClone, timelineOffsetX);
         FixedPage.SetTop(taskClone, currentY);
         fixedPage.Children.Add(taskClone);
@@ -90,27 +120,41 @@ public static class DocumentExportService
             data.GanttChart.TodayLine.Canvas,
             data.GanttChart.TodayLine.Width,
             data.GanttChart.TodayLine.Height);
-        
+
         FixedPage.SetLeft(todayClone, timelineOffsetX);
         FixedPage.SetTop(todayClone, currentY);
         fixedPage.Children.Add(todayClone);
 
         currentY += Math.Max(data.GanttChart.Grid.Height, data.GanttChart.Tasks.Height);
-        
+
         // ═══════════════════════════════════════════════════════════════════
-        // 4.5. HEADER (второй - над EngagementStrip)
+        // 4.5. ДУБЛИРУЮЩИЕ ЗАГОЛОВКИ (над EngagementStrip)
         // ═══════════════════════════════════════════════════════════════════
         if (data.EngagementStrip != null)
         {
+            // Sidebar Header (дубль)
+            if (data.Sidebar != null)
+            {
+                var sidebarHeaderClone2 = CloneCanvasAsVisual(
+                    data.Sidebar.Header.Canvas,
+                    data.Sidebar.Header.Width,
+                    data.Sidebar.Header.Height);
+
+                FixedPage.SetLeft(sidebarHeaderClone2, 0);
+                FixedPage.SetTop(sidebarHeaderClone2, currentY);
+                fixedPage.Children.Add(sidebarHeaderClone2);
+            }
+
+            // Timeline Header (дубль)
             var headerClone2 = CloneCanvasAsVisual(
                 data.GanttChart.Header.Canvas,
                 data.GanttChart.Header.Width,
                 data.GanttChart.Header.Height);
-    
+
             FixedPage.SetLeft(headerClone2, timelineOffsetX);
             FixedPage.SetTop(headerClone2, currentY);
             fixedPage.Children.Add(headerClone2);
-    
+
             currentY += data.GanttChart.Header.Height;
         }
 
@@ -121,33 +165,36 @@ public static class DocumentExportService
         {
             // Разделительная линия
             currentY += data.SectionGap / 2;
-            
+
             var separator = CreateSeparatorLine(data.TotalWidth);
             FixedPage.SetLeft(separator, 0);
             FixedPage.SetTop(separator, currentY);
             fixedPage.Children.Add(separator);
-            
+
             currentY += data.SectionGap / 2;
 
-            // Колонка с именами ресурсов (если есть)
+            // Колонка с именами ресурсов (выравнивание по правому краю)
             if (data.EngagementStrip.ResourceNames != null)
             {
                 var namesClone = CloneCanvasAsVisual(
                     data.EngagementStrip.ResourceNames.Canvas,
                     data.EngagementStrip.ResourceNames.Width,
                     data.EngagementStrip.ResourceNames.Height);
-                
-                FixedPage.SetLeft(namesClone, 0);
+
+                // Выравнивание по правому краю области timelineOffsetX
+                var namesX = timelineOffsetX - data.EngagementStrip.ResourceNames.Width;
+
+                FixedPage.SetLeft(namesClone, namesX);
                 FixedPage.SetTop(namesClone, currentY);
                 fixedPage.Children.Add(namesClone);
             }
 
-            // Canvas загрузки ресурсов - начинается с того же смещения, что и GanttChart
+            // Canvas загрузки ресурсов
             var engagementClone = CloneCanvasAsVisual(
                 data.EngagementStrip.Engagement.Canvas,
                 data.EngagementStrip.Engagement.Width,
                 data.EngagementStrip.Engagement.Height);
-            
+
             FixedPage.SetLeft(engagementClone, timelineOffsetX);
             FixedPage.SetTop(engagementClone, currentY);
             fixedPage.Children.Add(engagementClone);

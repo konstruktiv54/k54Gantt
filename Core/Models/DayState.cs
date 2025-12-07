@@ -26,29 +26,35 @@ public enum DayState
 
     /// <summary>
     /// Частично занят (0 &lt; AllocationPercent &lt; MaxWorkload).
-    /// Визуализация: цвет ресурса с прозрачностью (пропорционально загрузке).
+    /// Визуализация: стандартный синий цвет с прозрачностью (пропорционально загрузке).
     /// </summary>
     PartialAssigned = 3,
 
     /// <summary>
     /// Полностью занят (AllocationPercent == MaxWorkload).
-    /// Визуализация: цвет ресурса без прозрачности.
+    /// Визуализация: стандартный синий цвет без прозрачности.
     /// </summary>
     Assigned = 4,
 
     /// <summary>
     /// Перегружен: AllocationPercent > MaxWorkload, 
     /// или есть назначения в период отсутствия/неучастия.
-    /// Визуализация: цвет ресурса + красный контур.
+    /// Визуализация: стандартный синий цвет + красный контур.
     /// </summary>
     Overbooked = 5,
 
     /// <summary>
     /// Выходной день (суббота или воскресенье).
     /// Назначения игнорируются, загрузка = 0.
-    /// Визуализация: светло-коричневая диагональная штриховка.
+    /// Визуализация: светло-коричневый фон.
     /// </summary>
-    Weekend = 6
+    Weekend = 6, 
+    /// <summary>
+    /// Праздничный день.
+    /// Назначения игнорируются, загрузка = 0.
+    /// Визуализация: светло-розовый фон.
+    /// </summary>
+    Holiday = 7
 }
 
 /// <summary>
@@ -72,6 +78,7 @@ public static class DayStateExtensions
             DayState.Assigned => "Занят",
             DayState.Overbooked => "Перегружен",
             DayState.Weekend => "Выходной день",
+            DayState.Holiday => "Праздничный день",
             _ => "Неизвестно"
         };
     }
@@ -87,13 +94,14 @@ public static class DayStateExtensions
         return state switch
         {
             DayState.Weekend => 1,          // Наивысший — выходные
-            DayState.Absence => 2,          // Второй — отсутствие (отпуск, больничный)
-            DayState.Overbooked => 3,
-            DayState.Assigned => 4,
-            DayState.PartialAssigned => 5,
-            DayState.NotParticipating => 6,
-            DayState.Free => 7,             // Низший приоритет
-            _ => 7
+            DayState.Holiday => 2,          // Второй — праздник
+            DayState.Absence => 3,          // Третий — отсутствие
+            DayState.Overbooked => 4,
+            DayState.Assigned => 5,
+            DayState.PartialAssigned => 6,
+            DayState.NotParticipating => 7,
+            DayState.Free => 8,             // Низший приоритет
+            _ => 8
         };
     }
 
@@ -124,8 +132,6 @@ public static class DayStateExtensions
     /// <returns>True для Weekend, Absence, NotParticipating.</returns>
     public static bool IsNonWorking(this DayState state)
     {
-        return state == DayState.Weekend 
-            || state == DayState.Absence 
-            || state == DayState.NotParticipating;
+        return state is DayState.Weekend or DayState.Holiday or DayState.Absence or DayState.NotParticipating;
     }
 }

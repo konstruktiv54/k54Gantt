@@ -19,6 +19,7 @@ public partial class TaskItemViewModel : ObservableObject
     private readonly Action _onExpandChanged;
     private readonly Action<TaskItemViewModel>? _onShowPartsChanged;
     private readonly Action? _onTaskModified;
+    private readonly WorkingDaysCalculator _workingDaysCalculator;
 
     #endregion
 
@@ -38,6 +39,7 @@ public partial class TaskItemViewModel : ObservableObject
         Task task,
         ProjectManager manager,
         DateTime projectStart,
+        WorkingDaysCalculator workingDaysCalculator,
         int level = 0,
         TaskItemViewModel? parent = null,
         Action? onExpandChanged = null,
@@ -52,6 +54,7 @@ public partial class TaskItemViewModel : ObservableObject
         _onExpandChanged = onExpandChanged ?? (() => { });
         _onShowPartsChanged = onShowPartsChanged;
         _onTaskModified = onTaskModified;
+        _workingDaysCalculator = workingDaysCalculator;
 
         // Инициализация состояния
         _isExpanded = !task.IsCollapsed;
@@ -110,6 +113,7 @@ public partial class TaskItemViewModel : ObservableObject
         get => _projectStart.Add(Task.Start);
         set
         {
+            System.Diagnostics.Debug.WriteLine($"StartDate setter: Task={Task.Name}, OldStart={Task.Start}, NewValue={value}, ProjectStart={_projectStart}");
             var newStart = value - _projectStart;
             if (newStart < TimeSpan.Zero)
                 newStart = TimeSpan.Zero;
@@ -125,7 +129,25 @@ public partial class TaskItemViewModel : ObservableObject
     /// <summary>
     /// Дата окончания задачи (только чтение).
     /// </summary>
-    public DateTime EndDate => _projectStart.Add(Task.End);
+    //public DateTime EndDate => _projectStart.Add(Task.End);
+    public DateTime EndDate
+    {
+        get => _projectStart.Add(Task.End);
+        set 
+        {
+            var newEnd = value - _projectStart;
+            var minEnd = Task.Start + TimeSpan.FromDays(1);
+            if (newEnd < minEnd)
+                newEnd = minEnd;
+            
+            if (Task.End == newEnd) return;
+            _manager.SetEnd(Task,newEnd);
+            // логика установки даты окончания
+            OnPropertyChanged();
+            OnPropertyChanged(nameof(DaysDisplay));
+            _onTaskModified?.Invoke();
+        }
+    }
 
     /// <summary>
     /// Длительность в днях (редактируемая).
@@ -364,6 +386,10 @@ public partial class TaskItemViewModel : ObservableObject
 
     #region Display Properties
 
+    public int WorkingDays => Task.WorkingDays;
+
+    public string DaysDisplay => $"{DurationDays} ({WorkingDays})";
+    
     /// <summary>
     /// Иконка для TreeView (Material Design Icon name).
     /// </summary>

@@ -29,7 +29,7 @@ public partial class GanttChartControl : UserControl
     private readonly GridRenderer _gridRenderer;
     private readonly HeaderRenderer _headerRenderer;
     private readonly TaskRenderer _taskRenderer;
-
+    
     private bool _isRendering;
     private System.Windows.Threading.DispatcherTimer? _zoomDebounceTimer;
     private const int ZoomDebounceMs = 50;
@@ -120,6 +120,19 @@ public partial class GanttChartControl : UserControl
         get => (ProjectManager?)GetValue(ProjectManagerProperty);
         set => SetValue(ProjectManagerProperty, value);
     }
+    
+    public WorkingDaysCalculator? WorkingDaysCalculator
+    {
+        get => (WorkingDaysCalculator?)GetValue(WorkingDaysCalculatorProperty);
+        set => SetValue(WorkingDaysCalculatorProperty, value);
+    }
+
+    public static readonly DependencyProperty WorkingDaysCalculatorProperty =
+        DependencyProperty.Register(
+            nameof(WorkingDaysCalculator),
+            typeof(WorkingDaysCalculator),
+            typeof(GanttChartControl),
+            new PropertyMetadata(null));
 
     /// <summary>
     /// Ширина одной колонки (день) в пикселях.
@@ -284,6 +297,51 @@ public partial class GanttChartControl : UserControl
     {
         get => (string)GetValue(StatusMessageProperty);
         set => SetValue(StatusMessageProperty, value);
+    }
+    
+    
+    /// <summary>
+    /// Сервис производственного календаря для отображения праздников.
+    /// </summary>
+    public static readonly DependencyProperty CalendarServiceProperty =
+        DependencyProperty.Register(
+            nameof(CalendarService),
+            typeof(ProductionCalendarService),
+            typeof(GanttChartControl),
+            new PropertyMetadata(null, OnCalendarServiceChanged));
+
+    public ProductionCalendarService? CalendarService
+    {
+        get => (ProductionCalendarService?)GetValue(CalendarServiceProperty);
+        set => SetValue(CalendarServiceProperty, value);
+    }
+
+    private static void OnCalendarServiceChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
+    {
+        if (d is GanttChartControl control)
+        {
+            // Передаём сервис в GridRenderer
+            control._gridRenderer.CalendarService = e.NewValue as ProductionCalendarService;
+        
+            // Подписываемся/отписываемся от событий
+            if (e.OldValue is ProductionCalendarService oldService)
+            {
+                oldService.HolidaysChanged -= control.OnHolidaysChanged;
+            }
+        
+            if (e.NewValue is ProductionCalendarService newService)
+            {
+                newService.HolidaysChanged += control.OnHolidaysChanged;
+            }
+        
+            control.InvalidateChart();
+        }
+    }
+
+    private void OnHolidaysChanged(object? sender, EventArgs e)
+    {
+        // Перерисовываем диаграмму при изменении праздников
+        InvalidateChart();
     }
 
     #endregion
@@ -790,6 +848,7 @@ public partial class GanttChartControl : UserControl
     {
         ChartScrollViewer.ScrollToVerticalOffset(offset);
     }
+    
     
     #region Public Methods
     
@@ -2531,7 +2590,7 @@ public partial class GanttChartControl : UserControl
         var visibleTaskCount = visibleTasks.Count;
 
         // Вычисляем высоту БЕЗ лишнего буфера
-        var calculatedHeight = (visibleTaskCount+5) * RowHeight;
+        var calculatedHeight = (visibleTaskCount) * RowHeight;
 
         return calculatedHeight;
     }

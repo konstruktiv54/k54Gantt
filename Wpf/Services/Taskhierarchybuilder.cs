@@ -16,6 +16,7 @@ public class TaskHierarchyBuilder
     private readonly Action _onExpandChanged;
     private readonly Action<ViewModels.TaskItemViewModel>? _onShowPartsChanged;
     private readonly Action? _onTaskModified;
+    private readonly WorkingDaysCalculator _workingDaysCalculator;
 
     #endregion
 
@@ -25,10 +26,13 @@ public class TaskHierarchyBuilder
     /// Создаёт построитель иерархии.
     /// </summary>
     /// <param name="manager">ProjectManager с задачами.</param>
+    /// <param name="calculator"></param>
     /// <param name="onExpandChanged">Callback при изменении expand/collapse.</param>
     /// <param name="onShowPartsChanged">Callback при изменении ShowParts.</param>
+    /// <param name="onTaskModified"></param>
     public TaskHierarchyBuilder(
         ProjectManager manager,
+        WorkingDaysCalculator calculator,
         Action onExpandChanged,
         Action<ViewModels.TaskItemViewModel>? onShowPartsChanged = null,
         Action? onTaskModified = null)
@@ -37,6 +41,7 @@ public class TaskHierarchyBuilder
         _onExpandChanged = onExpandChanged;
         _onShowPartsChanged = onShowPartsChanged;
         _onTaskModified = onTaskModified;
+        _workingDaysCalculator = calculator;
     }
 
     #endregion
@@ -79,6 +84,7 @@ public class TaskHierarchyBuilder
                 task,
                 _manager,
                 projectStart,
+                _workingDaysCalculator,
                 level,
                 parentVm,
                 _onExpandChanged,
@@ -151,6 +157,7 @@ public class TaskHierarchyBuilder
                     part,
                     _manager,
                     _manager.Start,
+                    _workingDaysCalculator,
                     splitVm.Level + 1,
                     splitVm,
                     _onExpandChanged,

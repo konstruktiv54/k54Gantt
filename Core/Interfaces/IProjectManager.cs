@@ -74,6 +74,12 @@ public class Task
     /// End не может быть позже Deadline.
     /// </summary>
     public TimeSpan? Deadline { get; set; }
+    
+    /// <summary>
+    /// Количество рабочих дней.
+    /// </summary>
+    [JsonProperty("WorkingDays")]
+    public int WorkingDays { get; internal set; } = 0;
 
     /// <summary>
     /// Заметка к задаче.
