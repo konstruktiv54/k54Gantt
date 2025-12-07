@@ -510,6 +510,7 @@
                     x:Name="GanttChart"
                     Tag="{Binding}"
                     ProjectManager="{Binding ProjectManager}"
+                    CalendarService="{Binding CalendarService}"
                     ResourceService="{Binding ResourceService}"
                     UndoRedoService="{Binding UndoRedoService}"
                     SelectedTask="{Binding SelectedTask, Mode=TwoWay}"

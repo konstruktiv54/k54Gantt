@@ -15,6 +15,46 @@ namespace Wpf.Controls;
 public partial class ResourceEngagementStrip : UserControl
 {
     #region Dependency Properties
+    
+    /// <summary>
+    /// Сервис производственного календаря для отображения праздников.
+    /// </summary>
+    public static readonly DependencyProperty CalendarServiceProperty =
+        DependencyProperty.Register(
+            nameof(CalendarService),
+            typeof(ProductionCalendarService),
+            typeof(ResourceEngagementStrip),
+            new PropertyMetadata(null, OnCalendarServiceChanged));
+
+    public ProductionCalendarService? CalendarService
+    {
+        get => (ProductionCalendarService?)GetValue(CalendarServiceProperty);
+        set => SetValue(CalendarServiceProperty, value);
+    }
+    
+    private static void OnCalendarServiceChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
+    {
+        if (d is ResourceEngagementStrip strip)
+        {
+            // Подписываемся/отписываемся от событий
+            if (e.OldValue is ProductionCalendarService oldService)
+            {
+                oldService.HolidaysChanged -= strip.OnHolidaysChanged;
+            }
+        
+            if (e.NewValue is ProductionCalendarService newService)
+            {
+                newService.HolidaysChanged += strip.OnHolidaysChanged;
+            }
+        
+            strip.Refresh();
+        }
+    }
+    
+    private void OnHolidaysChanged(object? sender, EventArgs e)
+    {
+        Refresh();
+    }
 
     public static readonly DependencyProperty ShowResourceNamesProperty =
         DependencyProperty.Register(nameof(ShowResourceNames), typeof(bool),
@@ -75,7 +115,7 @@ public partial class ResourceEngagementStrip : UserControl
         get => (double)GetValue(HorizontalOffsetProperty);
         set => SetValue(HorizontalOffsetProperty, value);
     }
-
+    
     #endregion
 
     #region Events
@@ -383,6 +423,9 @@ public partial class ResourceEngagementStrip : UserControl
         {
             var day = startDay + TimeSpan.FromDays(dayOffset);
             var x = dayOffset * ColumnWidth;
+            
+            // Проверяем, является ли день праздником
+            bool isHoliday = CalendarService?.IsHoliday(day) ?? false;
 
             DayState state;
             int allocationPercent = 0;
@@ -396,9 +439,21 @@ public partial class ResourceEngagementStrip : UserControl
                 allocationPercent = status.AllocationPercent;
                 maxWorkload = status.MaxWorkload;
             
-                tooltipText = state == DayState.Weekend 
-                    ? BuildWeekendTooltip(day) 
-                    : BuildTooltipText(resource, status);
+                // Если день праздник - переопределяем состояние
+                if (isHoliday && state != DayState.Weekend && state != DayState.Absence)
+                {
+                    state = DayState.Holiday;
+                    tooltipText = BuildHolidayTooltip(day);
+                }
+                else
+                {
+                    tooltipText = state switch
+                    {
+                        DayState.Weekend => BuildWeekendTooltip(day),
+                        DayState.Holiday => BuildHolidayTooltip(day),
+                        _ => BuildTooltipText(resource, status)
+                    };
+                }
             }
             else
             {
@@ -425,6 +480,17 @@ public partial class ResourceEngagementStrip : UserControl
             StrokeThickness = 1
         };
         EngagementCanvas.Children.Add(line);
+    }
+    
+    private string BuildHolidayTooltip(TimeSpan day)
+    {
+        if (CalendarService == null || ProjectManager == null)
+            return "Праздничный день";
+    
+        var holiday = CalendarService.GetHoliday(day);
+        var date = ProjectManager.Start.AddDays(day.Days);
+    
+        return holiday != null ? $"{holiday.Name}\n{date:dd.MM.yyyy}\nПраздничный день" : $"Праздничный день\n{date:dd.MM.yyyy}";
     }
     
     /// <summary>
@@ -543,6 +609,7 @@ public partial class ResourceEngagementStrip : UserControl
             DayState.Absence => new SolidColorBrush(Color.FromRgb(189, 189, 189)),
             DayState.NotParticipating => new SolidColorBrush(Color.FromRgb(238, 238, 238)),
             DayState.Weekend => new SolidColorBrush(Color.FromRgb(253, 248, 223)), // #EDE0D0 — как в GridRenderer
+            DayState.Holiday => new SolidColorBrush(Color.FromRgb(255, 240, 230)),
             DayState.PartialAssigned => CreatePartialBrush(allocation, maxWorkload),
             DayState.Assigned => AssignedBlueBrush,
             DayState.Overbooked => AssignedBlueBrush,

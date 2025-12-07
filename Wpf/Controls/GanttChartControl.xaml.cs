@@ -285,6 +285,51 @@ public partial class GanttChartControl : UserControl
         get => (string)GetValue(StatusMessageProperty);
         set => SetValue(StatusMessageProperty, value);
     }
+    
+    
+    /// <summary>
+    /// Сервис производственного календаря для отображения праздников.
+    /// </summary>
+    public static readonly DependencyProperty CalendarServiceProperty =
+        DependencyProperty.Register(
+            nameof(CalendarService),
+            typeof(ProductionCalendarService),
+            typeof(GanttChartControl),
+            new PropertyMetadata(null, OnCalendarServiceChanged));
+
+    public ProductionCalendarService? CalendarService
+    {
+        get => (ProductionCalendarService?)GetValue(CalendarServiceProperty);
+        set => SetValue(CalendarServiceProperty, value);
+    }
+
+    private static void OnCalendarServiceChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
+    {
+        if (d is GanttChartControl control)
+        {
+            // Передаём сервис в GridRenderer
+            control._gridRenderer.CalendarService = e.NewValue as ProductionCalendarService;
+        
+            // Подписываемся/отписываемся от событий
+            if (e.OldValue is ProductionCalendarService oldService)
+            {
+                oldService.HolidaysChanged -= control.OnHolidaysChanged;
+            }
+        
+            if (e.NewValue is ProductionCalendarService newService)
+            {
+                newService.HolidaysChanged += control.OnHolidaysChanged;
+            }
+        
+            control.InvalidateChart();
+        }
+    }
+
+    private void OnHolidaysChanged(object? sender, EventArgs e)
+    {
+        // Перерисовываем диаграмму при изменении праздников
+        InvalidateChart();
+    }
 
     #endregion
 
@@ -790,6 +835,7 @@ public partial class GanttChartControl : UserControl
     {
         ChartScrollViewer.ScrollToVerticalOffset(offset);
     }
+    
     
     #region Public Methods
     

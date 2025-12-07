@@ -10,6 +10,7 @@ public class EngagementCalculationService
 {
     private readonly ResourceService _resourceService;
     private ProjectManager? _projectManager;
+    private readonly ProductionCalendarService _calendarService;
 
     /// <summary>
     /// Порог завершённости, при котором задача считается выполненной (100%).
@@ -20,23 +21,15 @@ public class EngagementCalculationService
     /// Создаёт сервис расчёта вовлечённости.
     /// </summary>
     /// <param name="resourceService">Сервис управления ресурсами.</param>
-    public EngagementCalculationService(ResourceService resourceService)
+    /// <param name="calendarService">Сервис управления календарем</param>
+    public EngagementCalculationService(ResourceService resourceService, 
+        ProductionCalendarService calendarService)
     {
         _resourceService = resourceService ?? throw new ArgumentNullException(nameof(resourceService));
+        _calendarService = calendarService ?? throw new ArgumentNullException(nameof(calendarService));
     }
 
-    /// <summary>
-    /// Создаёт сервис расчёта вовлечённости с указанным ProjectManager.
-    /// </summary>
-    /// <param name="resourceService">Сервис управления ресурсами.</param>
-    /// <param name="projectManager">Менеджер проекта (для доступа к задачам).</param>
-    public EngagementCalculationService(
-        ResourceService resourceService,
-        ProjectManager projectManager)
-        : this(resourceService)
-    {
-        _projectManager = projectManager;
-    }
+
 
     /// <summary>
     /// Устанавливает или получает менеджер проекта.
@@ -105,8 +98,14 @@ public class EngagementCalculationService
         {
             return DayState.Weekend;
         }
+        
+        // ═══ ПРОВЕРКА ПРАЗДНИКОВ (второй приоритет) ═══
+        if (_calendarService.IsHoliday(day))
+        {
+            return DayState.Holiday;
+        }
 
-        // ═══ ПРОВЕРКА ОТСУТСТВИЯ (второй приоритет) ═══
+        // ═══ ПРОВЕРКА ОТСУТСТВИЯ (третий приоритет) ═══
         if (_resourceService.IsResourceAbsent(resourceId, day))
         {
             return DayState.Absence;
@@ -160,8 +159,13 @@ public class EngagementCalculationService
         {
             return DayStatus.Weekend(day, resourceId);
         }
-
-        // ═══ ПРОВЕРКА ОТСУТСТВИЯ (второй приоритет) ═══
+        // ═══ ПРОВЕРКА ПРАЗДНИКОВ (второй приоритет) ═══
+        if (_calendarService.IsHoliday(day))
+        {
+            return DayStatus.Holiday(day, resourceId);
+        }
+        
+        // ═══ ПРОВЕРКА ОТСУТСТВИЯ (третий приоритет) ═══
         var absence = _resourceService.GetAbsenceForDay(resourceId, day);
         if (absence != null)
         {
