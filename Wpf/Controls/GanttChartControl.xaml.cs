@@ -1787,8 +1787,10 @@ public partial class GanttChartControl : UserControl
 
         if (newStart < TimeSpan.Zero)
             newStart = TimeSpan.Zero;
-
+        
+        var newEnd = newStart + _dragState.OriginalDuration;
         ProjectManager.SetStart(_dragState.Task, newStart);
+        ProjectManager.SetEnd(_dragState.Task, newEnd);
     }
 
     private void UpdateResizingStartPreview(double deltaX)
@@ -2069,18 +2071,39 @@ public partial class GanttChartControl : UserControl
         switch (operation)
         {
             case DragOperation.Moving:
-                if (startChanged)
+            {
+                // При Moving изменяются И Start, И End
+                if (startChanged || endChanged)
                 {
-                    var command = new SetStartCommand(
-                        ProjectManager,
-                        task,
-                        _dragState.OriginalStart,
-                        task.Start);
-                
-                    // execute: false — изменение уже применено во время drag
-                    UndoRedoService.Execute(command, execute: false);
+                    // Используем транзакцию для группировки двух команд
+                    UndoRedoService.BeginTransaction($"Перемещение '{task.Name}'");
+        
+                    if (startChanged)
+                    {
+                        var startCommand = new SetStartCommand(
+                            ProjectManager,
+                            task,
+                            _dragState.OriginalStart,
+                            task.Start);
+            
+                        UndoRedoService.Execute(startCommand, execute: false);
+                    }
+        
+                    if (endChanged)
+                    {
+                        var endCommand = new SetEndCommand(
+                            ProjectManager,
+                            task,
+                            _dragState.OriginalEnd,
+                            task.End);
+            
+                        UndoRedoService.Execute(endCommand, execute: false);
+                    }
+        
+                    UndoRedoService.CommitTransaction();
                 }
                 break;
+            }
 
             case DragOperation.ResizingStart:
                 if (startChanged)

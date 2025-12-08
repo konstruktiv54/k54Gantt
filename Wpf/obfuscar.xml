@@ -1,0 +1,96 @@
+﻿<?xml version="1.0" encoding="utf-8" ?>
+<Obfuscator>
+
+  <!-- =================================== -->
+  <!-- ПУТИ -->
+  <!-- =================================== -->
+  <Var name="InPath"  value="bin\x64\Release\net10.0-windows" />          <!-- или net10.0-windows, если используешь .NET 10 -->
+  <Var name="OutPath" value="bin\Obfuscated" />
+
+  <Var name="KeyFile" value="" />                 <!-- если есть SNK — укажи путь, иначе оставь пустым -->
+
+  <!-- =================================== -->
+  <!-- ГЛОБАЛЬНЫЕ НАСТРОЙКИ ОБФУСКАЦИИ -->
+  <!-- =================================== -->
+  <Var name="HideStrings"         value="true"  />   <!-- Шифрование строк -->
+  <Var name="Optimize"            value="true"  />
+  <Var name="SuppressIldasm"      value="true"  />
+  <Var name="AntiTamper"          value="true"  />   <!-- если нужна защита от патчей -->
+  <Var name="ControlFlow"         value="high"  />   <!-- Максимальный control flow -->
+  <Var name="InvalidMetadata"     value="true"  />
+  <Var name="RenameFields"        value="true"  />
+  <Var name="RenameProperties"    value="true"  />
+  <Var name="RenameEvents"        value="true"  />
+  <Var name="RenameMethods"       value="true"  />
+  <Var name="RenameParameters"    value="true"  />
+  <Var name="UseUnicodeNames"     value="true"  />   <!-- Юникодные имена — максимально нечитаемо -->
+  <Var name="UseChineseNames"     value="false" />   <!-- можно включить, если хочешь иероглифы -->
+  <Var name="HidePrivateApi"      value="true"  />
+  <Var name="KeepPublicApi"       value="false" />
+
+  <!-- =================================== -->
+  <!-- КАКИЕ СБОРКИ ОБРАБАТЫВАЕМ -->
+  <!-- =================================== -->
+  <Module file="$(InPath)\k54Gantt.exe" />                 <!-- Основной исполняемый файл -->
+  <Module file="$(InPath)\k54Gantt.dll" />                 <!-- Если есть отдельная DLL -->
+  <Module file="$(InPath)\Core.dll" />                     <!-- Твоя основная библиотека -->
+  <Module file="$(InPath)\Wpf.dll" />                      <!-- Если UI в отдельной сборке -->
+
+  <!-- =================================== -->
+  <!-- ЧТО НЕЛЬЗЯ ТРОГАТЬ (ОБЯЗАТЕЛЬНО!) -->
+  <!-- =================================== -->
+
+  <!-- 1. WPF: XAML ищет типы по имени -->
+  <SkipType name="*/App" />                                 <!-- Application класс -->
+  <SkipType name="*/MainWindow" />
+  <SkipType name="*/Views.*" />                             <!-- Все View (окна, UserControl) -->
+  <SkipNamespace name="k54Gantt.Views" />
+  <SkipNamespace name="k54Gantt.Resources" />               <!-- Ресурсы, стили и т.д. -->
+
+  <!-- 2. MVVM: ViewModel-ы использует DataBinding -->
+  <SkipNamespace name="k54Gantt.ViewModels" />              <!-- НЕ трогаем ViewModel-ы вообще! -->
+  <!-- Если хочешь чуть обфусцировать — можно оставить только публичные свойства: -->
+  <!-- <SkipProperty name="*.ViewModels.*" attrib="public" /> -->
+
+  <!-- 3. Newtonsoft.Json — сериализация по именам полей -->
+  <SkipString name="[JsonProperty(*" />                     <!-- Все свойства с [JsonProperty] -->
+  <SkipField    name="*.Name" />                            <!-- Имена задач, ресурсов и т.п. -->
+  <SkipField    name="*.Id" />                              <!-- Guid-ы -->
+  <SkipField    name="*.Start" />
+  <SkipField    name="*.End" />
+  <SkipField    name="*.Duration" />
+  <SkipField    name="*.Complete" />
+  <SkipField    name="*.Resources" />
+  <SkipField    name="*.ResourceId" />
+  <SkipField    name="*.TaskId" />
+
+  <!-- 4. INotifyPropertyChanged — рефлексия в binding -->
+  <SkipType name="System.ComponentModel.INotifyPropertyChanged" />
+  <SkipMethod name="*OnPropertyChanged*" />
+
+  <!-- 5. Entry point -->
+  <SkipMethod name="*Main" />
+
+  <!-- 6. Ресурсы и стили (если используешь x:Key и т.п.) -->
+  <SkipType name="System.Windows.Application" />
+  <SkipType name="System.Windows.ResourceDictionary" />
+
+  <!-- 7. Твои DTO для сериализации (если они в отдельном namespace) -->
+  <SkipNamespace name="Core.Models.DTOs" />
+
+  <!-- 8. Публичное API, если планируешь плагины или расширения -->
+  <!-- <SkipType name="*/PublicApi.*" /> -->
+
+  <!-- =================================== -->
+  <!-- ДОПОЛНИТЕЛЬНО: Можно ещё сильнее -->
+  <!-- =================================== -->
+  <!-- Переименовывать даже private методы/поля в Core (кроме сериализуемых) -->
+  <SkipNamespace name="Core.Models.DTOs" keepnamespace="false" />
+  <SkipNamespace name="Core.Interfaces" keepnamespace="false" />
+
+  <!-- Оставляем читаемыми только критичные части -->
+  <SkipNamespace name="k54Gantt.Views"      keepnamespace="true" />
+  <SkipNamespace name="k54Gantt.ViewModels" keepnamespace="true" />
+  <SkipNamespace name="k54Gantt.Resources"  keepnamespace="true" />
+
+</Obfuscator>
